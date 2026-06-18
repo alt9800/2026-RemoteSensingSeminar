@@ -33,6 +33,13 @@ jobs:
 
       - name: Build all materials
         run: |
+          # Web 表示用 (HTML) は Jekyll によるレンダリングに任せる。
+          # slide.md をそのままコピーすることで、コードブロックが
+          # コピーしやすい通常の Markdown ページとして配信される。
+          #
+          # PDF は Marp で生成する。
+          # スライドショー形式で受講者が振り返りやすいようにするため。
+
           mkdir -p output/slides
           mkdir -p output/handson
 
@@ -49,13 +56,19 @@ jobs:
 
               find "$DATE_DIR" -maxdepth 1 -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.svg" \) -exec cp {} "output/slides/$DATE_DIR/" \;
 
+              # PDF 生成（Marp）
               echo "  Generating PDF..."
               marp "$DATE_DIR/slide.md" -o "output/slides/$DATE_DIR.pdf" --pdf --allow-local-files
 
-              echo "  Generating HTML..."
-              marp "$DATE_DIR/slide.md" -o "output/slides/$DATE_DIR.html" --html --allow-local-files
-
+              # Markdown コピー（Jekyll が HTML としてレンダリング）
+              # gh-pages 上での画像パスに合わせて相対パスを書き換える
               cp "$DATE_DIR/slide.md" "output/slides/$DATE_DIR.md"
+              sed -i "s|!\[\([^]]*\)\](assets/\([^)]*\))|![\1]($DATE_DIR/assets/\2)|g" "output/slides/$DATE_DIR.md"
+              sed -i "s|!\[\([^]]*\)\](./assets/\([^)]*\))|![\1]($DATE_DIR/assets/\2)|g" "output/slides/$DATE_DIR.md"
+              sed -i "s|!\[\([^]]*\)\](\([^/:)][^)]*\))|![\1]($DATE_DIR/\2)|g" "output/slides/$DATE_DIR.md"
+              sed -i "s|<img\([^>]*\)src=\"assets/|<img\1src=\"$DATE_DIR/assets/|g" "output/slides/$DATE_DIR.md"
+              sed -i "s|<img\([^>]*\)src=\"./assets/|<img\1src=\"$DATE_DIR/assets/|g" "output/slides/$DATE_DIR.md"
+              sed -i "s|$DATE_DIR/$DATE_DIR|$DATE_DIR|g" "output/slides/$DATE_DIR.md"
             fi
 
             if [ -d "$DATE_DIR/handson" ]; then
@@ -175,7 +188,9 @@ jobs:
               echo "  <h2>$DATE_DIR</h2>" >> output/index.html
             fi
             echo "  <div class=\"links\">" >> output/index.html
-            [ -f "output/slides/$DATE_DIR.html" ] && echo "    <a href=\"slides/$DATE_DIR.html\">スライド (HTML)</a>" >> output/index.html
+            # Web: Jekyll が slide.md をレンダリングした HTML（コードブロックのコピペ用）
+            [ -f "output/slides/$DATE_DIR.md" ] && echo "    <a href=\"slides/$DATE_DIR\">スライド (Web)</a>" >> output/index.html
+            # PDF: Marp 生成のスライドショー形式（振り返り用）
             [ -f "output/slides/$DATE_DIR.pdf" ] && echo "    <a href=\"slides/$DATE_DIR.pdf\" class=\"pdf\">スライド (PDF)</a>" >> output/index.html
             [ -d "output/handson/$DATE_DIR" ] && echo "    <a href=\"handson/$DATE_DIR/\" class=\"handson\">ハンズオン</a>" >> output/index.html
             echo "  </div>" >> output/index.html
