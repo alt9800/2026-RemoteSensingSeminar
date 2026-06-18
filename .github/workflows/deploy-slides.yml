@@ -1,0 +1,216 @@
+name: Deploy Seminar Materials
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '*/slide.md'
+      - '*/handson/**'
+      - '*/assets/**'
+      - '.github/workflows/deploy-seminar-materials.yml'
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TZ: 'Asia/Tokyo'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-cjk fonts-noto-cjk-extra
+          npm install -g @marp-team/marp-cli
+
+      - name: Build all materials
+        run: |
+          # 出力ディレクトリを作成
+          mkdir -p output/slides
+          mkdir -p output/handson
+          
+          # 全ての日付ディレクトリを処理
+          for DATE_DIR in $(find . -maxdepth 1 -type d -name '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' | sed 's|./||' | sort); do
+            echo "Processing $DATE_DIR..."
+            
+            # スライド生成
+            if [ -f "$DATE_DIR/slide.md" ]; then
+              echo "- Generating slides..."
+              
+              # アセットディレクトリを作成
+              mkdir -p "output/slides/$DATE_DIR"
+              
+              # アセットと画像をコピー
+              if [ -d "$DATE_DIR/assets" ]; then
+                cp -r "$DATE_DIR/assets" "output/slides/$DATE_DIR/"
+              fi
+              
+              # 画像ファイルをコピー
+              find "$DATE_DIR" -maxdepth 1 -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.svg" \) -exec cp {} "output/slides/$DATE_DIR/" \;
+              
+              # PDFはMarpで生成
+              echo "  Generating PDF..."
+              cd "$DATE_DIR" && marp slide.md -o slide.pdf --pdf --allow-local-files && cd ..
+              mv "$DATE_DIR/slide.pdf" "output/slides/$DATE_DIR.pdf"
+              
+              # Markdownファイルをコピー（GitHub Pagesで自動変換）
+              echo "  Copying Markdown..."
+              cp "$DATE_DIR/slide.md" "output/slides/$DATE_DIR.md"
+              
+              # 画像パスを調整
+              sed -i "s|!\[\([^]]*\)\](assets/\([^)]*\))|![\1]($DATE_DIR/assets/\2)|g" "output/slides/$DATE_DIR.md"
+              sed -i "s|!\[\([^]]*\)\](./assets/\([^)]*\))|![\1]($DATE_DIR/assets/\2)|g" "output/slides/$DATE_DIR.md"
+              sed -i "s|!\[\([^]]*\)\](\([^/:)][^)]*\))|![\1]($DATE_DIR/\2)|g" "output/slides/$DATE_DIR.md"
+              
+              # HTMLタグの画像パスも調整
+              sed -i "s|<img\([^>]*\)src=\"assets/|<img\1src=\"$DATE_DIR/assets/|g" "output/slides/$DATE_DIR.md"
+              sed -i "s|<img\([^>]*\)src=\"./assets/|<img\1src=\"$DATE_DIR/assets/|g" "output/slides/$DATE_DIR.md"
+              
+              # 重複を防ぐ
+              sed -i "s|$DATE_DIR/$DATE_DIR|$DATE_DIR|g" "output/slides/$DATE_DIR.md"
+            fi
+            
+            # ハンズオン資料をコピー
+            if [ -d "$DATE_DIR/handson" ]; then
+              echo "- Copying handson materials..."
+              cp -r "$DATE_DIR/handson" "output/handson/$DATE_DIR"
+            fi
+          done
+
+      - name: Create Jekyll config
+        run: |
+          cat > output/_config.yml << 'CONFIG_END'
+          # Jekyll設定
+          markdown: kramdown
+          highlighter: rouge
+          
+          # プラグイン
+          plugins:
+            - jekyll-relative-links
+            
+          # Markdownの処理設定
+          kramdown:
+            input: GFM
+            hard_wrap: false
+            auto_ids: true
+            footnote_nr: 1
+            entity_output: as_char
+            toc_levels: 1..6
+            smart_quotes: lsquo,rsquo,ldquo,rdquo
+            enable_coderay: false
+          CONFIG_END
+
+      - name: Generate index page
+        run: |
+          cat > output/index.html << 'INDEX_END'
+          <!DOCTYPE html>
+          <html lang="ja">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>📚 セミナー資料</title>
+              <style>
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                      max-width: 1200px;
+                      margin: 0 auto;
+                      padding: 20px;
+                      background: #f5f5f5;
+                  }
+                  .container {
+                      background: white;
+                      border-radius: 10px;
+                      padding: 30px;
+                      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                  }
+                  h1 {
+                      text-align: center;
+                      color: #333;
+                  }
+                  .seminar {
+                      border: 1px solid #ddd;
+                      border-radius: 8px;
+                      padding: 20px;
+                      margin: 15px 0;
+                      background: #fafafa;
+                  }
+                  .seminar h2 {
+                      margin-top: 0;
+                      color: #0366d6;
+                  }
+                  .links {
+                      display: flex;
+                      gap: 10px;
+                      flex-wrap: wrap;
+                  }
+                  .links a {
+                      display: inline-block;
+                      padding: 8px 16px;
+                      background: #0366d6;
+                      color: white;
+                      text-decoration: none;
+                      border-radius: 5px;
+                      transition: background 0.3s;
+                  }
+                  .links a:hover {
+                      background: #0256cc;
+                  }
+                  .links a.pdf {
+                      background: #d73a49;
+                  }
+                  .links a.pdf:hover {
+                      background: #cb2431;
+                  }
+                  .links a.handson {
+                      background: #28a745;
+                  }
+                  .links a.handson:hover {
+                      background: #218838;
+                  }
+                  .updated {
+                      text-align: center;
+                      color: #666;
+                      margin-top: 30px;
+                      font-size: 14px;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>📚 セミナー資料</h1>
+          INDEX_END
+          
+          # 各セミナーのリンクを生成
+          for DATE_DIR in $(find . -maxdepth 1 -type d -name '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' | sed 's|./||' | sort -r); do
+            if [ -f "output/slides/$DATE_DIR.html" ] || [ -f "output/slides/$DATE_DIR.pdf" ] || [ -d "output/handson/$DATE_DIR" ]; then
+              echo "<div class=\"seminar\">" >> output/index.html
+              echo "  <h2>📅 $DATE_DIR</h2>" >> output/index.html
+              echo "  <div class=\"links\">" >> output/index.html
+              
+              [ -f "output/slides/$DATE_DIR.md" ] && echo "    <a href=\"slides/$DATE_DIR\">📝 スライド (Markdown形式)</a>" >> output/index.html
+              [ -f "output/slides/$DATE_DIR.pdf" ] && echo "    <a href=\"slides/$DATE_DIR.pdf\" class=\"pdf\">📄 スライド (PDF)</a>" >> output/index.html
+              [ -d "output/handson/$DATE_DIR" ] && echo "    <a href=\"handson/$DATE_DIR/\" class=\"handson\">💻 ハンズオン</a>" >> output/index.html
+              
+              echo "  </div>" >> output/index.html
+              echo "</div>" >> output/index.html
+            fi
+          done
+          
+          echo "<div class=\"updated\">最終更新: $(TZ='Asia/Tokyo' date '+%Y年%m月%d日 %H:%M') (JST)</div>" >> output/index.html
+          echo "</div></body></html>" >> output/index.html
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./output
+          force_orphan: true
+          enable_jekyll: true
