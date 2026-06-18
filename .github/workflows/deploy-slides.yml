@@ -1,32 +1,194 @@
-- name: Build all materials
+name: Deploy Seminar Materials
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '*/slide.md'
+      - '*/handson/**'
+      - '*/assets/**'
+      - '.github/workflows/deploy-seminar-materials.yml'
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TZ: 'Asia/Tokyo'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-cjk fonts-noto-cjk-extra
+          npm install -g @marp-team/marp-cli
+
+      - name: Build all materials
         run: |
           mkdir -p output/slides
           mkdir -p output/handson
-          
+
           for DATE_DIR in $(find . -maxdepth 1 -type d -name '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' | sed 's|./||' | sort); do
             echo "Processing $DATE_DIR..."
-            
+
             if [ -f "$DATE_DIR/slide.md" ]; then
               echo "- Generating slides..."
               mkdir -p "output/slides/$DATE_DIR"
-              
+
               if [ -d "$DATE_DIR/assets" ]; then
                 cp -r "$DATE_DIR/assets" "output/slides/$DATE_DIR/"
               fi
-              
+
               find "$DATE_DIR" -maxdepth 1 -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.svg" \) -exec cp {} "output/slides/$DATE_DIR/" \;
-              
+
               echo "  Generating PDF..."
               marp "$DATE_DIR/slide.md" -o "output/slides/$DATE_DIR.pdf" --pdf --allow-local-files
-              
+
               echo "  Generating HTML..."
               marp "$DATE_DIR/slide.md" -o "output/slides/$DATE_DIR.html" --html --allow-local-files
-              
+
               cp "$DATE_DIR/slide.md" "output/slides/$DATE_DIR.md"
             fi
-            
+
             if [ -d "$DATE_DIR/handson" ]; then
               echo "- Copying handson materials..."
               cp -r "$DATE_DIR/handson" "output/handson/$DATE_DIR"
             fi
           done
+
+      - name: Create Jekyll config
+        run: |
+          cat > output/_config.yml << 'CONFIG_END'
+          markdown: kramdown
+          highlighter: rouge
+          plugins:
+            - jekyll-relative-links
+          kramdown:
+            input: GFM
+            hard_wrap: false
+            auto_ids: true
+            entity_output: as_char
+            toc_levels: 1..6
+            enable_coderay: false
+          CONFIG_END
+
+      - name: Generate index page
+        run: |
+          cat > output/index.html << 'INDEX_END'
+          <!DOCTYPE html>
+          <html lang="ja">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>衛星データ解析技術研究会 技術セミナー（応用編）</title>
+              <style>
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                      max-width: 960px;
+                      margin: 0 auto;
+                      padding: 20px;
+                      background: #f5f5f5;
+                  }
+                  .container {
+                      background: white;
+                      border-radius: 8px;
+                      padding: 30px;
+                      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+                  }
+                  h1 {
+                      text-align: center;
+                      color: #222;
+                      font-size: 1.4rem;
+                      margin-bottom: 30px;
+                  }
+                  .seminar {
+                      border: 1px solid #ddd;
+                      border-radius: 6px;
+                      padding: 16px 20px;
+                      margin: 12px 0;
+                      background: #fafafa;
+                  }
+                  .seminar h2 {
+                      margin: 0 0 12px 0;
+                      font-size: 1rem;
+                      color: #222;
+                  }
+                  .seminar h2 .date {
+                      color: #888;
+                      font-weight: normal;
+                      margin-right: 0.75em;
+                      font-size: 0.9rem;
+                  }
+                  .links {
+                      display: flex;
+                      gap: 8px;
+                      flex-wrap: wrap;
+                  }
+                  .links a {
+                      display: inline-block;
+                      padding: 6px 14px;
+                      background: #0366d6;
+                      color: white;
+                      text-decoration: none;
+                      border-radius: 4px;
+                      font-size: 0.875rem;
+                  }
+                  .links a:hover { background: #0256cc; }
+                  .links a.pdf { background: #c0392b; }
+                  .links a.pdf:hover { background: #a93226; }
+                  .links a.handson { background: #27ae60; }
+                  .links a.handson:hover { background: #1e8449; }
+                  .updated {
+                      text-align: center;
+                      color: #aaa;
+                      margin-top: 30px;
+                      font-size: 0.8rem;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>衛星データ解析技術研究会 技術セミナー（応用編）</h1>
+          INDEX_END
+
+          for PDF_FILE in $(find output/slides -maxdepth 1 -name '*.pdf' | sort); do
+            DATE_DIR=$(basename "$PDF_FILE" .pdf)
+
+            TITLE=""
+            if [ -f "$DATE_DIR/slide.md" ]; then
+              TITLE=$(grep -m1 '^footer:' "$DATE_DIR/slide.md" 2>/dev/null \
+                | sed 's/^footer:[[:space:]]*//' | tr -d '"' | tr -d "'")
+            fi
+
+            echo "<div class=\"seminar\">" >> output/index.html
+            if [ -n "$TITLE" ]; then
+              echo "  <h2><span class=\"date\">$DATE_DIR</span>$TITLE</h2>" >> output/index.html
+            else
+              echo "  <h2>$DATE_DIR</h2>" >> output/index.html
+            fi
+            echo "  <div class=\"links\">" >> output/index.html
+            [ -f "output/slides/$DATE_DIR.html" ] && echo "    <a href=\"slides/$DATE_DIR.html\">スライド (HTML)</a>" >> output/index.html
+            [ -f "output/slides/$DATE_DIR.pdf" ] && echo "    <a href=\"slides/$DATE_DIR.pdf\" class=\"pdf\">スライド (PDF)</a>" >> output/index.html
+            [ -d "output/handson/$DATE_DIR" ] && echo "    <a href=\"handson/$DATE_DIR/\" class=\"handson\">ハンズオン</a>" >> output/index.html
+            echo "  </div>" >> output/index.html
+            echo "</div>" >> output/index.html
+          done
+
+          echo "<div class=\"updated\">最終更新: $(TZ='Asia/Tokyo' date '+%Y年%m月%d日 %H:%M') (JST)</div>" >> output/index.html
+          echo "</div></body></html>" >> output/index.html
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./output
+          force_orphan: true
+          enable_jekyll: true
