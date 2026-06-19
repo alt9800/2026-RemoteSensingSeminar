@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>筆ポリゴン PMTiles ビューア</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" />
+  <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/pmtiles@2/dist/index.js"></script>
+  <style>
+    body { margin: 0; font-family: sans-serif; }
+    #map { width: 100vw; height: 100vh; }
+
+    /* 情報パネル */
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255,255,255,0.92);
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.6;
+      max-width: 260px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+    #info h3 { margin: 0 0 6px; font-size: 14px; color: #1C3A4A; }
+  </style>
+</head>
+<body>
+
+<div id="map"></div>
+<div id="info">
+  <h3>筆ポリゴン PMTiles ビューア</h3>
+  地図をスクロール・ズームして<br>Range Request の挙動を観察してください。<br>
+  <small>DevTools → Network タブ → fude.pmtiles</small>
+</div>
+
+<script>
+  // ─── 設定 ──────────────────────────────────────
+  // PMTiles ファイルのパス（同ディレクトリに fude.pmtiles を置く）
+  const PMTILES_PATH = './fude.pmtiles';
+  const SOURCE_LAYER  = 'fude';       // tippecanoe の -l に対応
+  const CENTER        = [131.4, 34.1]; // 山口県付近
+  const ZOOM          = 12;
+
+  // ─── PMTiles プロトコルを登録 ──────────────────
+  const protocol = new pmtiles.Protocol();
+  maplibregl.addProtocol('pmtiles', protocol.tile);
+
+  // ─── マップの初期化 ────────────────────────────
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: {
+      version: 8,
+      sources: {
+        // ベースマップ（OpenStreetMap ラスタータイル）
+        osm: {
+          type: 'raster',
+          tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+          tileSize: 256,
+          attribution: '© OpenStreetMap contributors'
+        },
+        // 筆ポリゴン（PMTiles）
+        fude: {
+          type: 'vector',
+          url: `pmtiles://${PMTILES_PATH}`
+        }
+      },
+      layers: [
+        // ベースマップ
+        {
+          id: 'osm',
+          type: 'raster',
+          source: 'osm'
+        },
+        // 筆ポリゴン（塗り）
+        {
+          id: 'fude-fill',
+          type: 'fill',
+          source: 'fude',
+          'source-layer': SOURCE_LAYER,
+          paint: {
+            'fill-color': '#6ab04c',
+            'fill-opacity': 0.4
+          }
+        },
+        // 筆ポリゴン（境界線）
+        {
+          id: 'fude-line',
+          type: 'line',
+          source: 'fude',
+          'source-layer': SOURCE_LAYER,
+          paint: {
+            'line-color': '#2d6a4f',
+            'line-width': 0.8
+          }
+        }
+      ]
+    },
+    center: CENTER,
+    zoom: ZOOM
+  });
+
+  map.addControl(new maplibregl.NavigationControl(), 'top-right');
+  map.addControl(new maplibregl.ScaleControl(), 'bottom-right');
+</script>
+</body>
+</html>
