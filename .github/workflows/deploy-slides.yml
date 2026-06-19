@@ -189,7 +189,7 @@ jobs:
             fi
             echo "  <div class=\"links\">" >> output/index.html
             # Web: Jekyll が slide.md をレンダリングした HTML（コードブロックのコピペ用）
-            [ -f "output/slides/$DATE_DIR.md" ] && echo "    <a href=\"slides/$DATE_DIR\">スライド (Web)</a>" >> output/index.html
+            [ -f "output/slides/$DATE_DIR.md" ] && echo "    <a href=\"slides/$DATE_DIR\">テキスト (HTML)</a>" >> output/index.html
             # PDF: Marp 生成のスライドショー形式（振り返り用）
             [ -f "output/slides/$DATE_DIR.pdf" ] && echo "    <a href=\"slides/$DATE_DIR.pdf\" class=\"pdf\">スライド (PDF)</a>" >> output/index.html
             [ -d "output/handson/$DATE_DIR" ] && echo "    <a href=\"handson/$DATE_DIR/\" class=\"handson\">ハンズオン</a>" >> output/index.html
