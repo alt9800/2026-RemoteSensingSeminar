@@ -4,7 +4,7 @@
 
 ---
 
-## Martin（Rust製 / 本講義の軸）
+## Martin（Rust製）
 
 ### インストール
 

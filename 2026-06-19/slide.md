@@ -9,13 +9,14 @@ style: |
      講義全体で使うブランドカラーを一元管理する。
      変更する場合はここだけ編集すればよい。              */
   :root {
-    --navy:       #1C3A4A;   /* 見出し・ダークスライド背景 */
+    --navy:       #1C3A4A;   /* 見出し・テーブルヘッダー */
     --teal:       #028090;   /* アクセント・ラベル・リンク */
     --green:      #2D7D46;   /* 正例・OKの強調 */
     --red:        #B91C1C;   /* 警告・注意事項 */
     --gray:       #374151;   /* 本文グレー */
     --light:      #F8FAFB;   /* テーブル偶数行・薄い背景 */
     --teal-light: #E6F4F6;   /* h2 の下線・カード背景 */
+    --brand:      #9DE371;   /* ロゴのイエローグリーン：タイトル・区切りスライドのアクセント */
   }
 
   /* ── 通常スライドの基本スタイル ──────────────────────── */
@@ -108,26 +109,34 @@ style: |
   .warn { color: var(--red);   font-weight: bold; }  /* 警告テキスト */
   .ok   { color: var(--green); font-weight: bold; }  /* OK・正解テキスト */
 
-  /* ── タイトルスライド（_class: title） ───────────────── */
+  /* ── タイトルスライド（_class: title） ─────────────────
+     プロジェクター投影を考慮して白背景。
+     ブランドカラー（--brand）を左帯として使い視認性を確保。 */
   section.title {
-    background: var(--navy);
-    color: #ffffff;
+    background: #ffffff;
+    color: var(--navy);
     justify-content: flex-start;
-    padding-top: 80px;
+    padding-top: 60px;
+    border-left: 14px solid var(--brand);
   }
-  section.title h1 { color: var(--teal); font-size: 1.5em; margin-bottom: 0.1em; }
-  section.title h2 { color: #ffffff; font-size: 2.2em; border: none; margin-bottom: 0.2em; }
-  section.title p  { color: #89B4C2; font-size: 0.85em; }
+  section.title h1 { color: var(--navy); font-size: 1.4em; margin-bottom: 0.1em; }
+  section.title h2 { color: var(--navy); font-size: 2.2em; border: none; margin-bottom: 0.2em; font-weight: bold; }
+  section.title h3 { color: var(--teal); font-size: 1.2em; font-weight: normal; }
+  section.title p  { color: var(--gray); font-size: 0.85em; }
 
-  /* ── ダークスライド（_class: dark）─ ハンズオン導入・予告などに使用 */
+  /* ── アクセントスライド（_class: dark）─ ハンズオン導入・予告などに使用
+     名称は dark のまま互換性を保つが、プロジェクター向けに白背景へ変更。
+     上部にブランドカラーの帯を入れてセクション区切りを示す。          */
   section.dark {
-    background: var(--navy);
-    color: #D0E8ED;
+    background: #ffffff;
+    color: var(--navy);
     justify-content: flex-start;
+    border-top: 12px solid var(--brand);
+    padding-top: 52px;
   }
-  section.dark h1   { color: var(--teal); font-size: 1.2em; margin-bottom: 0.3em; }
-  section.dark h2   { color: #ffffff; font-size: 1.8em; border: none; margin-bottom: 0.6em; }
-  section.dark li   { color: #D0E8ED; }
+  section.dark h1   { color: var(--gray); font-size: 1.1em; margin-bottom: 0.2em; font-weight: normal; }
+  section.dark h2   { color: var(--navy); font-size: 1.9em; border: none; margin-bottom: 0.5em; font-weight: bold; }
+  section.dark li   { color: var(--gray); }
   section.dark .note { color: var(--teal); font-style: italic; }
 ---
 
@@ -399,12 +408,12 @@ map.addSource('fude', {
 
 <div class="label">実例</div>
 
-# 地番ポリゴン 11万フィーチャー：描画されない問題
+# 大量ポリゴンが描画されない問題：地番図を例に
 
 | | 内容 |
 |---|---|
-| **状況** | 11万フィーチャーの地番ポリゴンを GeoJSON から直接読み込み |
-| **症状** | ConoHa レンタルサーバーでデータは到達しているが描画されない |
+| **状況** | 10万オーダーの地番ポリゴンを GeoJSON から直接読み込み |
+| **症状** | レンタルサーバーでデータは到達しているが描画されない |
 | **初期仮説** | ネットワーク転送が原因？ |
 | **切り分け** | `curl` → GeoJSON 到達確認。DevTools Memory → メモリ展開済みと確認 |
 | **原因** | MapLibre 内部の `geojson-vt` 変換処理が CPU ボトルネック |
