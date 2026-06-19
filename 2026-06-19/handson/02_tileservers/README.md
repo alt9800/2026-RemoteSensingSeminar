@@ -6,6 +6,8 @@
 
 ## Martin（Rust製）
 
+---
+
 ### インストール
 
 ```bash
@@ -122,4 +124,35 @@ Martin の `/z/x/y` と比較すると URL の複雑さが分かりやすい。
 | PostGIS のデータをリアルタイム配信したい | Martin |
 | ラスタータイルを動的に生成したい | tileserver-gl |
 | OGC 標準準拠が必要 | GeoServer |
+| とりあえず確認したい（SaaS） | MapTiler Cloud |
+
+---
+
+## chiitiler（Go製 / 補足）
+
+Go製の軽量タイルサーバー。日本のGISコミュニティ発のプロジェクトで、設定がシンプルで起動が速い点はMartinと近い。
+
+- PMTiles・MBTiles に対応
+- シングルバイナリで動作
+- Martin と同様に `/z/x/y` でタイルを配信
+
+```bash
+# GitHub Releases からバイナリをDL
+# https://github.com/kanahiro/chiitiler
+
+chiitiler --source ./fude.pmtiles --port 3001
+# → http://localhost:3001/{z}/{x}/{y}
+```
+
+Martinと用途が重なるため両方を使い分ける必要はないが、Go環境が既にある場合や日本語ドキュメントを参照しやすい点で選択肢になる。
+
+比較表にも追記：
+
+| 状況 | 選択 |
+|---|---|
+| PMTiles を静的配信するだけ | Nginx（第2回で扱う）|
+| PostGIS のデータをリアルタイム配信したい | Martin |
+| ラスタータイルを動的に生成したい | tileserver-gl |
+| OGC 標準準拠が必要 | GeoServer |
+| 軽量・シンプルに PMTiles を配信（Go環境） | chiitiler |
 | とりあえず確認したい（SaaS） | MapTiler Cloud |
