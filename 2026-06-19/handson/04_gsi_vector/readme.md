@@ -117,3 +117,24 @@ Mapterhorn は z14 までしか実データがないため、z15 以上のリク
 
 フィルター式や paint プロパティの変更は Maputnik 上でリアルタイムに確認しながら作業できる。  
 編集結果は JSON でエクスポートして `map.setStyle()` に渡す。
+
+---
+
+## 公式リソース
+
+| リポジトリ | 内容 |
+|---|---|
+| [gsimaps-vector-experiment](https://github.com/gsi-cyberjapan/gsimaps-vector-experiment) | 地理院地図Vector提供実験の本体。タイルURLや仕様の起点。 |
+| [gsivectortile-mapbox-gl-js](https://github.com/gsi-cyberjapan/gsivectortile-mapbox-gl-js) | MapLibre（Mapbox GL JS）で表示するサンプル。`std.json` のソース。 |
+| [gsimaps-vector-stylesamples](https://github.com/gsi-cyberjapan/gsimaps-vector-stylesamples) | スタイルサンプル集。カスタマイズの出発点として使いやすい。 |
+| [gsivectortile-3d-like-building](https://github.com/gsi-cyberjapan/gsivectortile-3d-like-building) | 建物の3D風表示サンプル。`render_height` の使い方の参考になる。 |
+| [gsivectortile-color-design](https://github.com/gsi-cyberjapan/gsivectortile-color-design) | カラーデザイン変更ツール。style.json のダウンロードが可能。 |
+
+地理院地図Vector の公式ページ：https://maps.gsi.go.jp/vector/
+
+タイルURL：
+```
+https://cyberjapandata.gsi.go.jp/xyz/experimental_bvmap/{z}/{x}/{y}.pbf
+```
+
+「提供実験」の位置づけのため、URLやデータ構成が予告なく変更される可能性がある点に注意。
