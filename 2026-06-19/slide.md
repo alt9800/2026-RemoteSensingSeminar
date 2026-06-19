@@ -414,6 +414,42 @@ map.addSource('fude', {
 
 ---
 
+<div class="label">ハンズオン — 事前準備</div>
+
+# ツールのインストール
+
+**GDAL / ogr2ogr**
+
+```bash
+# macOS
+brew install gdal
+
+# Linux (Ubuntu/Debian)
+sudo apt install gdal-bin
+
+# Windows → OSGeo4W インストーラー（QGIS に同梱されていれば不要）
+#   https://trac.osgeo.org/osgeo4w/
+```
+
+**tippecanoe**
+
+```bash
+# macOS
+brew install tippecanoe
+
+# Linux (Ubuntu/Debian)
+sudo apt install tippecanoe
+
+# Windows → WSL (Windows Subsystem for Linux) を使用
+#   WSL 導入: https://learn.microsoft.com/ja-jp/windows/wsl/install
+#   WSL 内で上記 Linux コマンドを実行する
+```
+
+<p class="warn">tippecanoe は Windows ネイティブビルドが存在しない。Windows の方は WSL を事前に有効化してください。</p>
+<div class="note">詳細な確認手順は handson/00_setup.md を参照。</div>
+
+---
+
 <!-- _class: dark -->
 
 # ハンズオン
@@ -444,8 +480,12 @@ ogr2ogr \
 変換後の確認：
 
 ```bash
-ls -lh fude.geojson   # ファイルサイズ確認（数百MB程度）
-wc -l fude.geojson    # フィーチャー数の目安
+# macOS / Linux
+ls -lh fude.geojson
+wc -l fude.geojson
+
+# Windows (PowerShell)
+Get-Item fude.geojson | Select-Object Length
 ```
 
 - 筆ポリゴンは JGD2011（EPSG:6668）配布 → EPSG:4326 に変換しないと tippecanoe に渡せない
@@ -458,6 +498,7 @@ wc -l fude.geojson    # フィーチャー数の目安
 # tippecanoe で PMTiles 生成
 
 ```bash
+# macOS / Linux（Windows は WSL 内で実行）
 tippecanoe \
   -o fude.pmtiles \
   --force \
@@ -528,7 +569,13 @@ const map = new maplibregl.Map({
 ```
 
 ```bash
-python3 -m http.server 8000  # file:// では動作しない
+# macOS / Linux
+python3 -m http.server 8000
+
+# Windows (PowerShell / コマンドプロンプト)
+python -m http.server 8000
+# または
+npx serve .
 ```
 
 <div class="note">source-layer の名前は tippecanoe の -l で指定した文字列と一致する必要がある（嵌まりやすい）。</div>
