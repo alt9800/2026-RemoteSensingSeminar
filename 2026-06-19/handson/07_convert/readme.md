@@ -1,8 +1,3 @@
----
-marp: true
-theme: default
-paginate: true
----
 
 # 筆ポリゴン → PMTiles 変換マニュアル
 
