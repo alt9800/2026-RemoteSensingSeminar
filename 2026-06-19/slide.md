@@ -150,8 +150,7 @@ style: |
 ## タイル配信①
 ### データ構造とパース
 
-2026年6月19日（金）　全6回 × 2.5h
-対象：WebエンジニアGeocJSON・QGIS経験あり
+2026年6月19日（金）
 
 ---
 
@@ -179,7 +178,7 @@ style: |
 
 - タイルピラミッドの仕組みを説明できる
 - MVT（protobuf）と PMTiles の関係を整理できる
-- `tippecanoe` で PMTiles を生成し、MapLibre で表示できた
+- `tippecanoe` で PMTiles を生成し、MapLibre で表示できる
 
 <br>
 

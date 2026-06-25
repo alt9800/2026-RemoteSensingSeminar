@@ -174,6 +174,50 @@ jobs:
                   .links a.pdf:hover { background: #a93226; }
                   .links a.handson { background: #2980b9; }
                   .links a.handson:hover { background: #2171a3; }
+                  .curriculum {
+                      margin-top: 32px;
+                      border-top: 1px solid #d0e4c4;
+                      padding-top: 24px;
+                  }
+                  .curriculum > h2 {
+                      font-size: 0.8rem;
+                      font-weight: 600;
+                      color: #6b8f5e;
+                      letter-spacing: 0.05em;
+                      margin-bottom: 16px;
+                  }
+                  .topic-group {
+                      margin-bottom: 20px;
+                  }
+                  .group-label {
+                      font-size: 0.7rem;
+                      font-weight: 700;
+                      color: #4CAF50;
+                      letter-spacing: 0.08em;
+                      text-transform: uppercase;
+                      margin-bottom: 6px;
+                  }
+                  .topic {
+                      border-left: 3px solid #d0e4c4;
+                      padding: 6px 10px;
+                      margin: 4px 0;
+                  }
+                  .topic-title {
+                      font-size: 0.85rem;
+                      color: #1a2e10;
+                      font-weight: 600;
+                  }
+                  .topic-num {
+                      display: inline;
+                      font-size: 0.75rem;
+                      color: #6b8f5e;
+                      margin-right: 0.5em;
+                  }
+                  .topic-keywords {
+                      font-size: 0.75rem;
+                      color: #888;
+                      margin-top: 2px;
+                  }
                   .updated {
                       text-align: center;
                       color: #8aab7e;
@@ -214,6 +258,51 @@ jobs:
             echo "  </div>" >> output/index.html
             echo "</div>" >> output/index.html
           done
+
+          cat >> output/index.html << 'CURRICULUM_END'
+          <section class="curriculum">
+            <h2>カリキュラム概要</h2>
+            <div class="topic-group">
+              <div class="group-label">タイル配信</div>
+              <div class="topic">
+                <span class="topic-num">第1回</span>
+                <span class="topic-title">タイル配信①：データ構造とパース</span>
+                <div class="topic-keywords">XYZ/TMS/WMTS・MVT・PMTiles・tippecanoe・MapLibre GL JS・OpenLayers</div>
+              </div>
+              <div class="topic">
+                <span class="topic-num">第2回</span>
+                <span class="topic-title">タイル配信②：自前配信とカートグラフィック</span>
+                <div class="topic-keywords">Nginx・PMTiles静的配信・Maputnik・Martin・MapLibre Style Spec・OpenStreetMap</div>
+              </div>
+            </div>
+            <div class="topic-group">
+              <div class="group-label">3D技術</div>
+              <div class="topic">
+                <span class="topic-num">第3回</span>
+                <span class="topic-title">3D技術①：スマホセンサーとAR</span>
+                <div class="topic-keywords">GeolocationAPI・DeviceOrientationEvent・A-Frame・AR.js・WebXR</div>
+              </div>
+              <div class="topic">
+                <span class="topic-num">第4回</span>
+                <span class="topic-title">3D技術②：点群・3DGSのWeb可視化</span>
+                <div class="topic-keywords">3D Tiles・Potree/COPC・CesiumJS・deck.gl・3D Gaussian Splatting</div>
+              </div>
+            </div>
+            <div class="topic-group">
+              <div class="group-label">高さデータ</div>
+              <div class="topic">
+                <span class="topic-num">第5回</span>
+                <span class="topic-title">高さデータ①：フォーマット・変換処理</span>
+                <div class="topic-keywords">InSAR・LiDAR・SfM・GeoTIFF/COG・GDAL・Terrain RGB・SRTM/AW3D30</div>
+              </div>
+              <div class="topic">
+                <span class="topic-num">第6回</span>
+                <span class="topic-title">高さデータ②：可視化と実務データとのオーバーラップ</span>
+                <div class="topic-keywords">MapLibre terrain・deck.gl TerrainLayer・NDWI/NDVI・防災重点溜池・PWA</div>
+              </div>
+            </div>
+          </section>
+          CURRICULUM_END
 
           echo "<div class=\"updated\">最終更新: $(TZ='Asia/Tokyo' date '+%Y年%m月%d日 %H:%M') (JST)</div>" >> output/index.html
           echo "</div></body></html>" >> output/index.html
