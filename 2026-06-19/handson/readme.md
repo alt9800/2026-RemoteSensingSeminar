@@ -8,3 +8,4 @@
 - [タイル生成実践の例](./05_gbmap/)
 - [WebGIS書き方練習帳](./06_practice/)
 - [変換手順](./07_convert/)
+- [MBTilesとPMTilesの比較](./08_MB_vs_PM/)
