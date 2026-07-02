@@ -1,0 +1,22 @@
+# Martin 設定ファイルサンプル
+# 起動: martin --config martin.yml
+
+listen_addresses: "0.0.0.0:3000"
+
+# PMTiles / MBTiles ファイルを配信する場合
+pmtiles:
+  paths:
+    - ./                  # このディレクトリ以下の .pmtiles を自動検出
+  sources:
+    fude:                 # /fude/{z}/{x}/{y} でアクセス可能になる
+      path: ./fude.pmtiles
+
+# PostGIS と接続する場合（該当しない行はコメントアウトしたまま）
+# postgres:
+#   connection_string: postgresql://user:password@localhost/gisdb
+#   tables:
+#     fude:
+#       schema: public
+#       table: fude_polygon
+#       srid: 4326
+#       geometry_column: geom
