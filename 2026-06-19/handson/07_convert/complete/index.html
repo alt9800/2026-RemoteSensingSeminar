@@ -106,11 +106,10 @@ const map = new maplibregl.Map({
         attribution: BASEMAPS.osm.attribution,
         maxzoom: BASEMAPS.osm.maxzoom
       },
-      fude: {
-        type: 'vector',
-        url: `pmtiles://${location.origin}/fude.pmtiles`
-        // Martin の場合: url: 'http://192.168.2.103:3000/fude'
-      }
+        fude: {
+          type: 'vector',
+          url: 'pmtiles://./fude.pmtiles'
+        }
     },
     layers: [
       {
