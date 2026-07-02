@@ -1,49 +1,193 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <title>筆ポリゴン</title>
-  <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
-  <link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet">
-  <script src="https://unpkg.com/pmtiles@3/dist/pmtiles.js"></script>
-  <style>
-    body { margin: 0; }
-    #map { width: 100vw; height: 100vh; }
-  </style>
+<meta charset="utf-8" />
+<title>fude - 宇部市筆ポリゴン</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/pmtiles@3/dist/pmtiles.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: sans-serif; }
+#map { width: 100vw; height: 100vh; }
+
+#info {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: white;
+  border: 1px solid #bbb;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.7;
+  max-width: 280px;
+  pointer-events: none;
+}
+#info.empty { color: #888; }
+
+#legend {
+  position: absolute;
+  bottom: 30px;
+  left: 10px;
+  background: white;
+  border: 1px solid #bbb;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.legend-row { display: flex; align-items: center; gap: 8px; }
+.swatch { width: 14px; height: 14px; border: 1px solid #999; flex-shrink: 0; }
+
+#basemap-control {
+  position: absolute;
+  top: 10px;
+  right: 50px;
+  background: white;
+  border: 1px solid #bbb;
+  padding: 6px 10px;
+  font-size: 12px;
+  display: flex;
+  gap: 8px;
+}
+#basemap-control label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+</style>
 </head>
 <body>
 <div id="map"></div>
-<script>
-  const protocol = new pmtiles.Protocol();
-  maplibregl.addProtocol('pmtiles', protocol.tile);
+<div id="info" class="empty">クリックでフィーチャ情報を表示</div>
+<div id="legend">
+  <div class="legend-row"><div class="swatch" style="background:#3da642;"></div>田（水田）</div>
+  <div class="legend-row"><div class="swatch" style="background:#e6b800;"></div>畑（普通畑・樹園地等）</div>
+  <div class="legend-row"><div class="swatch" style="background:#aaaaaa;"></div>その他</div>
+</div>
+<div id="basemap-control">
+  <label><input type="radio" name="basemap" value="osm" checked> OSM</label>
+  <label><input type="radio" name="basemap" value="jpmap"> 地理院</label>
+  <label><input type="radio" name="basemap" value="photo"> 空中写真</label>
+</div>
 
-  const map = new maplibregl.Map({
-    container: 'map',
-    style: {
-      version: 8,
-      sources: {
-        osm: {
-          type: 'raster',
-          tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-          tileSize: 256
-        },
-        fude: {
-          type: 'vector',
-          url: 'pmtiles://./fude.pmtiles'
+<script>
+const protocol = new pmtiles.Protocol();
+maplibregl.addProtocol('pmtiles', protocol.tile.bind(protocol));
+
+const BASEMAPS = {
+  osm: {
+    tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+    attribution: '© OpenStreetMap contributors',
+    maxzoom: 19
+  },
+  jpmap: {
+    tiles: ['https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png'],
+    attribution: '国土地理院',
+    maxzoom: 18
+  },
+  photo: {
+    tiles: ['https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg'],
+    attribution: '国土地理院',
+    maxzoom: 18
+  }
+};
+
+const map = new maplibregl.Map({
+  container: 'map',
+  style: {
+    version: 8,
+    sources: {
+      basemap: {
+        type: 'raster',
+        tiles: BASEMAPS.osm.tiles,
+        tileSize: 256,
+        attribution: BASEMAPS.osm.attribution,
+        maxzoom: BASEMAPS.osm.maxzoom
+      },
+      fude: {
+        type: 'vector',
+        url: `pmtiles://${location.origin}/fude.pmtiles`
+        // Martin の場合: url: 'http://192.168.2.103:3000/fude'
+      }
+    },
+    layers: [
+      {
+        id: 'basemap',
+        type: 'raster',
+        source: 'basemap',
+        paint: { 'raster-opacity': 0.75 }
+      },
+      {
+        id: 'fude-fill',
+        type: 'fill',
+        source: 'fude',
+        'source-layer': 'fude',
+        paint: {
+          'fill-color': [
+            'match', ['get', 'land_type'],
+            100, '#3da642',
+            200, '#e6b800',
+            '#aaaaaa'
+          ],
+          'fill-opacity': 0.8
         }
       },
-      layers: [
-        { id: 'osm', type: 'raster', source: 'osm' },
-        {
-          id: 'fude-fill', type: 'fill', source: 'fude',
-          'source-layer': 'fude',
-          paint: { 'fill-color': '#6ab04c', 'fill-opacity': 0.5 }
+      {
+        id: 'fude-outline',
+        type: 'line',
+        source: 'fude',
+        'source-layer': 'fude',
+        paint: {
+          'line-color': '#1a1a1a',
+          'line-width': 0.8
         }
-      ]
-    },
-    center: [131.25, 33.95],
-    zoom: 12
+      }
+    ]
+  },
+  center: [131.33194, 34.142498],
+  zoom: 14
+});
+
+map.addControl(new maplibregl.NavigationControl(), 'top-right');
+map.addControl(new maplibregl.ScaleControl(), 'bottom-right');
+map.addControl(new maplibregl.GeolocateControl({
+  positionOptions: { enableHighAccuracy: true },
+  trackUserLocation: true
+}));
+
+// ベースマップ切り替え
+document.querySelectorAll('input[name="basemap"]').forEach(radio => {
+  radio.addEventListener('change', (e) => {
+    const cfg = BASEMAPS[e.target.value];
+    map.getSource('basemap').setTiles(cfg.tiles);
+    // 空中写真のときはポリゴン透明度を少し下げて地形が見えるようにする
+    map.setPaintProperty(
+      'fude-fill', 'fill-opacity',
+      e.target.value === 'photo' ? 0.65 : 0.8
+    );
   });
+});
+
+// クリックで属性表示
+const info = document.getElementById('info');
+map.on('click', 'fude-fill', (e) => {
+  const p = e.features[0].properties;
+  const landLabel = p.land_type === 100 ? '田' : p.land_type === 200 ? '畑' : '不明';
+  info.className = '';
+  info.innerHTML = [
+    `<strong>筆ポリゴン</strong>`,
+    `land_type: ${landLabel} (${p.land_type})`,
+    `edit_year: ${p.edit_year}`,
+    `issue_year: ${p.issue_year}`,
+    `local_government_cd: ${p.local_government_cd}`,
+    `polygon_uuid: <span style="font-size:10px">${p.polygon_uuid}</span>`
+  ].join('<br>');
+});
+
+map.on('mouseenter', 'fude-fill', () => { map.getCanvas().style.cursor = 'pointer'; });
+map.on('mouseleave', 'fude-fill', () => { map.getCanvas().style.cursor = ''; });
 </script>
 </body>
 </html>
