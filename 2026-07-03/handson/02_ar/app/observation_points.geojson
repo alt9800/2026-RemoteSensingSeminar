@@ -1,0 +1,131 @@
+{
+  "type": "FeatureCollection",
+  "properties": {
+    "_comment": "第3回ハンズオン②用ダミーデータ。base座標は概算。当日の実測GPSに置換のこと。",
+    "base_lat": 33.9446,
+    "base_lon": 131.3041
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          131.3041,
+          33.9448713
+        ]
+      },
+      "properties": {
+        "name": "圃場A（水稲）",
+        "type": "farmland",
+        "height_m": 1.5,
+        "note": "生育良好。近赤外の反射が高い",
+        "ndvi": 0.82
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          131.3044249,
+          33.9446
+        ]
+      },
+      "properties": {
+        "name": "圃場B（畑地）",
+        "type": "farmland",
+        "height_m": 1.5,
+        "note": "作付け直後。土壌露出が多い",
+        "ndvi": 0.41
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          131.3042624,
+          33.9443739
+        ]
+      },
+      "properties": {
+        "name": "防災重点ため池",
+        "type": "pond",
+        "height_m": 0.5,
+        "note": "水域。NDVIは負値",
+        "ndvi": -0.08
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          131.3038293,
+          33.9447809
+        ]
+      },
+      "properties": {
+        "name": "林縁観測点",
+        "type": "forest",
+        "height_m": 3.0,
+        "note": "常緑広葉樹。年間を通じ高NDVI",
+        "ndvi": 0.88
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          131.3039917,
+          33.9443287
+        ]
+      },
+      "properties": {
+        "name": "定点カメラ",
+        "type": "sensor",
+        "height_m": 2.0,
+        "note": "地上設置の観測機器"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              131.3043166,
+              33.945007
+            ],
+            [
+              131.3045331,
+              33.945007
+            ],
+            [
+              131.3045331,
+              33.9448261
+            ],
+            [
+              131.3043166,
+              33.9448261
+            ],
+            [
+              131.3043166,
+              33.945007
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "name": "圃場区画C",
+        "type": "farmland_parcel",
+        "ndvi": 0.73,
+        "height_m": 2.0,
+        "note": "AR上で NDVI に応じた色・高さで押し出す想定"
+      }
+    }
+  ]
+}

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="color-scheme" content="light">
+<title>ハンズオン② 観測ポイントAR</title>
+
+<!-- A-Frame 1.6.0（AR.js 3.4.7 が要求するバージョン） -->
+<script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+<!-- AR.js 3.4.7（location based を含む非NFTビルド）。raw.githack 経由で配信する -->
+<script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
+
+<style>
+  :root {
+    --ink:#1A1A1A; --sub:#6B7280; --line:#C9CDD2; --accent:#2D7D46;
+    --bg:#FFFFFF; --panel:#F8FAFB;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; }
+  body { font-family:"BIZ UDPGothic","Hiragino Sans",system-ui,sans-serif; color:var(--ink); }
+
+  /* 開始オーバーレイ。iOS では権限要求をタップ内で行う必要があるため、必ずゲートを置く */
+  #overlay {
+    position:fixed; inset:0; z-index:20;
+    background:var(--bg); display:flex; align-items:center; justify-content:center;
+    padding:24px;
+  }
+  #overlay .card {
+    max-width:420px; border:1px solid var(--line); padding:24px;
+  }
+  #overlay h1 { font-size:1.15rem; margin:0 0 10px; }
+  #overlay p { font-size:.86rem; color:var(--sub); margin:0 0 14px; line-height:1.6; }
+  #start {
+    font:inherit; width:100%; padding:12px 18px;
+    background:var(--bg); color:var(--ink); border:1.5px solid var(--ink);
+    border-radius:2px; cursor:pointer;
+  }
+  #start:active { background:var(--panel); }
+  .hint { font-size:.78rem; }
+
+  /* 画面上部の状態表示（HUD） */
+  #hud {
+    position:fixed; top:0; left:0; right:0; z-index:15;
+    font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.72rem;
+    color:var(--ink); background:rgba(248,250,251,.85);
+    padding:6px 10px; border-bottom:1px solid var(--line);
+  }
+  #err { color:#B91C1C; }
+</style>
+</head>
+<body>
+
+<div id="hud">GPS: —</div>
+
+<div id="overlay">
+  <div class="card">
+    <h1>観測ポイントAR</h1>
+    <p>カメラと位置情報を使い、周囲の観測ポイントをカメラ映像に重ねて表示します。屋外で、周囲の安全を確認してから開始してください。</p>
+    <button id="start">開始</button>
+    <p class="hint">iPhone は「動作と方向」「カメラ」「位置情報」の許可が必要です。<br>
+      <a href="../participants/" style="color:var(--accent)">操作手順を開く</a></p>
+  </div>
+</div>
+
+<script>
+  // ---- NDVI → 色 -----------------------------------------------------
+  function lerpHex(a, b, t) {
+    const pa = [1,3,5].map(i => parseInt(a.substr(i,2),16));
+    const pb = [1,3,5].map(i => parseInt(b.substr(i,2),16));
+    const p  = pa.map((v,i) => Math.round(v + (pb[i]-v)*t));
+    return "#" + p.map(v => v.toString(16).padStart(2,"0")).join("");
+  }
+  function ndviColor(v) {
+    if (v == null) return "#8A8F98";      // 値なし（機器など）
+    if (v < 0)     return "#2B6CB0";      // 水域：青
+    const t = Math.max(0, Math.min(1, v));
+    return lerpHex("#C9A227", "#2D7D46", t); // 低NDVI(黄)→高NDVI(緑)
+  }
+  function labelText(p) {
+    return (p.ndvi != null) ? (p.name + "  (NDVI " + p.ndvi + ")") : p.name;
+  }
+
+  // ---- ラベルを常にカメラへ向ける自作コンポーネント -------------------
+  AFRAME.registerComponent("face-camera", {
+    tick: function () {
+      var cam = this.el.sceneEl && this.el.sceneEl.camera;
+      if (!cam) return;
+      var camPos = new THREE.Vector3();  cam.getWorldPosition(camPos);
+      var myPos  = new THREE.Vector3();  this.el.object3D.getWorldPosition(myPos);
+      camPos.y = myPos.y;                // 水平回転のみ（文字は立てたまま）
+      this.el.object3D.lookAt(camPos);
+    }
+  });
+
+  // ---- ポイント／ポリゴンの生成 --------------------------------------
+  function makeCard(text, elev) {
+    // 背景プレーン＋テキストのカード。カメラへ向ける。
+    var card = document.createElement("a-entity");
+    card.setAttribute("position", "0 " + elev + " 0");
+    card.setAttribute("face-camera", "");
+
+    var plane = document.createElement("a-plane");
+    plane.setAttribute("color", "#F8FAFB");
+    plane.setAttribute("opacity", "0.9");
+    plane.setAttribute("width", "10");
+    plane.setAttribute("height", "2.4");
+
+    var t = document.createElement("a-text");
+    t.setAttribute("value", text);
+    t.setAttribute("align", "center");
+    t.setAttribute("color", "#111111");
+    t.setAttribute("width", "20");
+    t.setAttribute("position", "0 0 0.05");
+
+    card.appendChild(plane);
+    card.appendChild(t);
+    return card;
+  }
+
+  function addPoint(scene, lat, lon, p) {
+    var wrap = document.createElement("a-entity");
+    wrap.setAttribute("gps-new-entity-place", "latitude: " + lat + "; longitude: " + lon);
+
+    var h = p.height_m || 1.5;
+    var box = document.createElement("a-box");
+    box.setAttribute("color", ndviColor(p.ndvi));
+    box.setAttribute("opacity", "0.85");
+    box.setAttribute("scale", "2 " + h + " 2");
+    box.setAttribute("position", "0 " + (h/2) + " 0");
+    wrap.appendChild(box);
+
+    wrap.appendChild(makeCard(labelText(p), h + 2.2));
+    scene.appendChild(wrap);
+  }
+
+  function addPolygon(scene, ring, p) {
+    // 閉じ点を除いた頂点から重心と範囲（メートル）を求め、押し出したブロックを置く
+    var pts = ring.slice(0, ring.length - 1);
+    var lat = 0, lon = 0;
+    pts.forEach(function (c) { lon += c[0]; lat += c[1]; });
+    lat /= pts.length; lon /= pts.length;
+
+    var lats = pts.map(function (c) { return c[1]; });
+    var lons = pts.map(function (c) { return c[0]; });
+    var mLat = 110574, mLon = 111320 * Math.cos(lat * Math.PI/180);
+    var depth = (Math.max.apply(null,lats) - Math.min.apply(null,lats)) * mLat;
+    var width = (Math.max.apply(null,lons) - Math.min.apply(null,lons)) * mLon;
+    var h = p.height_m || 2;
+
+    var wrap = document.createElement("a-entity");
+    wrap.setAttribute("gps-new-entity-place", "latitude: " + lat + "; longitude: " + lon);
+
+    var box = document.createElement("a-box");
+    box.setAttribute("color", ndviColor(p.ndvi));
+    box.setAttribute("opacity", "0.5");
+    box.setAttribute("width", width.toFixed(1));
+    box.setAttribute("depth", depth.toFixed(1));
+    box.setAttribute("height", h);
+    box.setAttribute("position", "0 " + (h/2) + " 0");
+    wrap.appendChild(box);
+
+    wrap.appendChild(makeCard(labelText(p), h + 2.2));
+    scene.appendChild(wrap);
+  }
+
+  // ---- データ読み込み ------------------------------------------------
+  function loadPlaces(scene) {
+    fetch("./observation_points.geojson")
+      .then(function (r) { return r.json(); })
+      .then(function (gj) {
+        var n = 0;
+        gj.features.forEach(function (f) {
+          var g = f.geometry, p = f.properties;
+          if (g.type === "Point") {
+            addPoint(scene, g.coordinates[1], g.coordinates[0], p); n++;
+          } else if (g.type === "Polygon") {
+            addPolygon(scene, g.coordinates[0], p); n++;
+          }
+        });
+        setHud("データ読込: " + n + " 件");
+      })
+      .catch(function (e) { setHud('<span id="err">GeoJSON読込エラー: ' + e + "</span>"); });
+  }
+
+  function setHud(html) { document.getElementById("hud").innerHTML = html; }
+
+  // ---- シーン構築（開始ボタンの後）-----------------------------------
+  function buildScene() {
+    var scene = document.createElement("a-scene");
+    scene.setAttribute("vr-mode-ui", "enabled: false");
+    scene.setAttribute("embedded", "");
+    scene.setAttribute("arjs", "sourceType: webcam; videoTexture: true; debugUIEnabled: false;");
+    scene.setAttribute("renderer", "antialias: true; alpha: true;");
+
+    var cam = document.createElement("a-camera");
+    // 既定の look-controls を切り、AR.js の方位制御に置き換える（ブレ低減つき）
+    cam.setAttribute("look-controls-enabled", "false");
+    cam.setAttribute("arjs-device-orientation-controls", "smoothingFactor: 0.1");
+    cam.setAttribute("gps-new-camera", "gpsMinDistance: 5");
+    scene.appendChild(cam);
+
+    document.body.appendChild(scene);
+
+    // GPS更新のたびに現在地を表示
+    cam.addEventListener("gps-camera-update-position", function (e) {
+      if (e.detail && e.detail.position) {
+        var d = e.detail.position;
+        setHud("GPS: " + d.latitude.toFixed(6) + ", " + d.longitude.toFixed(6));
+      }
+    });
+
+    loadPlaces(scene);
+  }
+
+  // ---- 開始（iOS の権限要求をタップ内で行う）-------------------------
+  document.getElementById("start").addEventListener("click", function () {
+    var tasks = [];
+    var DO = window.DeviceOrientationEvent, DM = window.DeviceMotionEvent;
+    if (DO && typeof DO.requestPermission === "function") tasks.push(DO.requestPermission());
+    if (DM && typeof DM.requestPermission === "function") tasks.push(DM.requestPermission());
+
+    Promise.all(tasks).then(function () {
+      document.getElementById("overlay").style.display = "none";
+      buildScene();
+    }).catch(function (err) {
+      setHud('<span id="err">センサー権限エラー: ' + err + "</span>");
+      // 権限が取れなくてもカメラ映像だけは出す
+      document.getElementById("overlay").style.display = "none";
+      buildScene();
+    });
+  });
+</script>
+</body>
+</html>

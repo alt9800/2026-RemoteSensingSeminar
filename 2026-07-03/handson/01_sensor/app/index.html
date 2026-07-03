@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="color-scheme" content="light">
+<title>ハンズオン① 位置・方位の確認</title>
+<style>
+  /* 明示的にライトテーマで固定する（ダークモードには追従させない） */
+  :root {
+    --ink:   #1A1A1A;
+    --sub:   #6B7280;
+    --line:  #C9CDD2;
+    --accent:#2D7D46;
+    --warn:  #B91C1C;
+    --bg:    #FFFFFF;
+    --panel: #F8FAFB;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "BIZ UDPGothic", "Hiragino Sans", system-ui, sans-serif;
+    line-height: 1.6;
+  }
+  /* ニートライン（外枠）。カートグラフィのモチーフに合わせた最小限の装飾 */
+  .frame {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 20px 18px 40px;
+    border-left: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    min-height: 100vh;
+  }
+  h1 { font-size: 1.15rem; margin: 0 0 2px; }
+  .sub { color: var(--sub); font-size: .82rem; margin: 0 0 18px; }
+
+  button {
+    font: inherit;
+    padding: 12px 18px;
+    background: var(--bg);
+    color: var(--ink);
+    border: 1.5px solid var(--ink);
+    border-radius: 2px;
+    cursor: pointer;
+    width: 100%;
+  }
+  button:active { background: var(--panel); }
+
+  .status { font-size: .8rem; color: var(--sub); margin: 8px 0 20px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 14px;
+    align-items: baseline;
+  }
+  .k { color: var(--sub); font-size: .82rem; }
+  .v {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 1rem;
+    text-align: right;
+  }
+
+  section {
+    border-top: 1px solid var(--line);
+    padding-top: 14px;
+    margin-top: 22px;
+  }
+  .label {
+    font-size: .68rem; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--accent); font-weight: 700; margin-bottom: 10px;
+  }
+
+  /* 方位ダイヤル */
+  .dial-wrap { display: flex; justify-content: center; margin: 6px 0 4px; }
+  .heading-big {
+    text-align: center;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 1.4rem;
+  }
+  .method { text-align: center; color: var(--sub); font-size: .74rem; margin-top: 2px; }
+  .note { color: var(--sub); font-size: .76rem; margin-top: 14px; }
+  .warn { color: var(--warn); }
+</style>
+</head>
+<body>
+<div class="frame">
+  <h1>位置・方位の確認</h1>
+  <p class="sub">第3回 ハンズオン① / Geolocation + DeviceOrientation</p>
+
+  <button id="start">センサーを開始</button>
+  <p class="status" id="status">「センサーを開始」を押すと、位置と方位の取得を始めます（HTTPS が必要です）。</p>
+
+  <section>
+    <div class="label">Geolocation</div>
+    <div class="grid">
+      <div class="k">緯度 lat</div><div class="v" id="lat">—</div>
+      <div class="k">経度 lon</div><div class="v" id="lon">—</div>
+      <div class="k">精度 accuracy</div><div class="v" id="acc">—</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="label">DeviceOrientation</div>
+    <div class="grid">
+      <div class="k">alpha (Z)</div><div class="v" id="alpha">—</div>
+      <div class="k">beta (X)</div><div class="v" id="beta">—</div>
+      <div class="k">gamma (Y)</div><div class="v" id="gamma">—</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="label">方位 heading</div>
+    <div class="dial-wrap">
+      <svg width="150" height="150" viewBox="0 0 150 150" aria-label="方位ダイヤル">
+        <circle cx="75" cy="75" r="60" fill="none" stroke="#C9CDD2" stroke-width="1"/>
+        <!-- 目盛り -->
+        <g stroke="#C9CDD2" stroke-width="1">
+          <line x1="75" y1="15" x2="75" y2="25"/>
+          <line x1="75" y1="125" x2="75" y2="135"/>
+          <line x1="15" y1="75" x2="25" y2="75"/>
+          <line x1="125" y1="75" x2="135" y2="75"/>
+        </g>
+        <text x="75" y="12" text-anchor="middle" font-size="11" fill="#6B7280">N</text>
+        <text x="75" y="146" text-anchor="middle" font-size="11" fill="#6B7280">S</text>
+        <text x="143" y="79" text-anchor="middle" font-size="11" fill="#6B7280">E</text>
+        <text x="8" y="79" text-anchor="middle" font-size="11" fill="#6B7280">W</text>
+        <!-- 北を指す針。端末の向き(heading)に応じて逆回転させ、常に真北を指す -->
+        <g id="needle">
+          <line x1="75" y1="75" x2="75" y2="28" stroke="#2D7D46" stroke-width="3"/>
+          <circle cx="75" cy="75" r="4" fill="#2D7D46"/>
+        </g>
+      </svg>
+    </div>
+    <div class="heading-big" id="heading">—</div>
+    <div class="method" id="method">取得方式: —</div>
+  </section>
+
+  <p class="note" id="ori-status"></p>
+  <p class="note">
+    確認する点：iOS と Android で heading の取得方式が変わります。端末を水平に持って回し、
+    針が実際の北を指すか、地図アプリの方位と一致するかを見てください。
+    横持ちにすると値がずれる場合があります（画面回転の補正が必要）。
+  </p>
+
+  <p class="note"><a href="../participants/" style="color:var(--accent)">操作手順を開く</a></p>
+</div>
+
+<script>
+  function setText(id, text) { document.getElementById(id).textContent = text; }
+  function fmt(x, d) { return (x == null) ? "—" : Number(x).toFixed(d); }
+
+  // 画面の回転角（横持ち対応）。方位に加算して補正する。
+  function screenAngle() {
+    if (screen.orientation && typeof screen.orientation.angle === "number") {
+      return screen.orientation.angle;
+    }
+    if (typeof window.orientation === "number") return window.orientation;
+    return 0;
+  }
+
+  function rotateNeedle(heading) {
+    // heading は「端末上部が向く方位（真北から時計回り）」。
+    // 北を指す針にするには、逆方向へ回す。
+    document.getElementById("needle")
+      .setAttribute("transform", "rotate(" + (-heading) + " 75 75)");
+  }
+
+  // ---- 方位の算出 ----------------------------------------------------
+  // 優先順位: iOS の webkitCompassHeading > Android の絶対方位 > 相対 alpha
+  var gotAbsolute = false;
+
+  function handleOrientation(e, isAbsolute) {
+    setText("alpha", fmt(e.alpha, 1));
+    setText("beta",  fmt(e.beta, 1));
+    setText("gamma", fmt(e.gamma, 1));
+
+    var heading = null, method = "—";
+
+    if (typeof e.webkitCompassHeading === "number") {
+      // iOS: 0=北, 時計回り。真北基準の値がそのまま得られる
+      heading = e.webkitCompassHeading;
+      method = "webkitCompassHeading (iOS)";
+    } else if (isAbsolute && e.alpha != null) {
+      // Android(絶対): alpha は反時計回り。方位へ変換する
+      heading = (360 - e.alpha) % 360;
+      method = "deviceorientationabsolute (Android)";
+    } else if (e.alpha != null) {
+      // 相対 alpha の可能性。真北基準ではないことがある
+      heading = (360 - e.alpha) % 360;
+      method = "alpha（相対の可能性あり）";
+    }
+
+    if (heading != null) {
+      heading = (heading + screenAngle()) % 360;
+      setText("heading", heading.toFixed(1) + "°");
+      setText("method", "取得方式: " + method);
+      rotateNeedle(heading);
+    }
+  }
+
+  function onAbsolute(e) { gotAbsolute = true; handleOrientation(e, true); }
+  function onRelative(e) { if (gotAbsolute) return; handleOrientation(e, false); }
+
+  function attachOrientation() {
+    window.addEventListener("deviceorientationabsolute", onAbsolute, true);
+    window.addEventListener("deviceorientation", onRelative, true);
+    setText("ori-status", "");
+  }
+
+  // ---- 位置の取得 ----------------------------------------------------
+  function startGeolocation() {
+    if (!("geolocation" in navigator)) {
+      setText("status", "この端末は Geolocation に対応していません");
+      return;
+    }
+    navigator.geolocation.watchPosition(
+      function (pos) {
+        var c = pos.coords;
+        setText("lat", fmt(c.latitude, 6));
+        setText("lon", fmt(c.longitude, 6));
+        setText("acc", fmt(c.accuracy, 1) + " m");
+        setText("status", "取得中");
+      },
+      function (err) { setText("status", "位置エラー: " + err.message); },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }
+
+  // ---- 開始（ユーザージェスチャの中で権限要求する）--------------------
+  document.getElementById("start").addEventListener("click", function () {
+    var D = window.DeviceOrientationEvent;
+    if (D && typeof D.requestPermission === "function") {
+      // iOS 13+ : ここは必ずタップ内で呼ぶ
+      D.requestPermission()
+        .then(function (res) {
+          if (res === "granted") attachOrientation();
+          else setText("ori-status", "方位センサーが許可されませんでした");
+        })
+        .catch(function (err) { setText("ori-status", "権限要求エラー: " + err); });
+    } else {
+      // Android など: 権限ダイアログなし（ただし HTTPS は必須）
+      attachOrientation();
+    }
+    startGeolocation();
+  });
+</script>
+</body>
+</html>
