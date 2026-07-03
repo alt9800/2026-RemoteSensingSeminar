@@ -174,8 +174,7 @@
     document.body.appendChild(scene);
 
     // カメラ映像が読み込まれたら通知（AR.jsが発火）
-    scene.addEventListener("arjs-video-loaded", function () { setCam("起動"); setErr(""); });
-
+    window.addEventListener("arjs-video-loaded", function () { setCam("起動"); setErr(""); });
     cam.addEventListener("gps-camera-update-position", function (e) {
       if (e.detail && e.detail.position) {
         var d = e.detail.position;
