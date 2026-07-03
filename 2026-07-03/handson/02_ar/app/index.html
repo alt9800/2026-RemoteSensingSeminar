@@ -162,7 +162,6 @@
     var scene = document.createElement("a-scene");
     scene.setAttribute("vr-mode-ui", "enabled: false");
     scene.setAttribute("loading-screen", "enabled: false"); // 青いローディング画面を出さない
-    scene.setAttribute("embedded", "");
     scene.setAttribute("arjs", "sourceType: webcam; videoTexture: true; debugUIEnabled: false;");
     scene.setAttribute("renderer", "antialias: true; alpha: true;");
 
@@ -173,8 +172,9 @@
     scene.appendChild(cam);
     document.body.appendChild(scene);
 
-    // カメラ映像が読み込まれたら通知（AR.jsが発火）
+    // カメラ映像が読み込まれたら通知（AR.js は window に発火する）
     window.addEventListener("arjs-video-loaded", function () { setCam("起動"); setErr(""); });
+
     cam.addEventListener("gps-camera-update-position", function (e) {
       if (e.detail && e.detail.position) {
         var d = e.detail.position;
@@ -192,23 +192,15 @@
     }, 8000);
   }
 
-  // ---- 開始：カメラ・方位の権限をこのタップ内で取得する ---------------
+  // ---- 開始：方位・モーションの権限をこのタップ内で取得する -----------
+  // カメラ（getUserMedia）は AR.js に一度だけ取得させる。ここで事前取得して停止すると、
+  // iOS では再取得が黒画面になることがあるため、二重取得しない。
   document.getElementById("start").addEventListener("click", function () {
     setCam("要求中");
     var promises = [];
     var DO = window.DeviceOrientationEvent, DM = window.DeviceMotionEvent;
-    // iOS の方位・モーション権限（ジェスチャ内で呼ぶ必要がある）
     if (DO && typeof DO.requestPermission === "function") promises.push(DO.requestPermission());
     if (DM && typeof DM.requestPermission === "function") promises.push(DM.requestPermission());
-    // カメラ権限もこのタップ内で取得しておく（iOS Safari 対策）。
-    // 取得後すぐ停止し、AR.js に本番の取得を任せる（許可はセッション中保持される）。
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      promises.push(
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-          .then(function (s) { s.getTracks().forEach(function (t) { t.stop(); }); })
-          .catch(function (e) { setErr("カメラ不可: " + (e.name || e)); })
-      );
-    }
     Promise.allSettled(promises).then(function () {
       document.getElementById("overlay").style.display = "none";
       buildScene();
