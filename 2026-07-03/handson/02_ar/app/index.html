@@ -6,9 +6,8 @@
 <meta name="color-scheme" content="light">
 <title>ハンズオン② 観測ポイントAR</title>
 
-<!-- A-Frame 1.6.0（AR.js 3.4.7 が要求するバージョン） -->
+<!-- A-Frame 1.6.0 と AR.js 3.4.7。AR.js は位置合わせ・方位のみに使い、カメラ表示には使わない -->
 <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-<!-- AR.js 3.4.7（location based を含む非NFTビルド）。raw.githack 経由で配信する -->
 <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
 
 <style>
@@ -19,6 +18,16 @@
   * { box-sizing: border-box; }
   html, body { margin:0; height:100%; }
   body { font-family:"BIZ UDPGothic","Hiragino Sans",system-ui,sans-serif; color:var(--ink); }
+
+  /* 自前のカメラ映像。最背面に全画面で敷く */
+  #cam {
+    position:fixed; inset:0; width:100%; height:100%;
+    object-fit:cover; background:#000; z-index:-1;
+  }
+  /* A-Frame の透過シーンをカメラ映像の上に重ねる */
+  a-scene {
+    position:fixed; inset:0; width:100%; height:100%; z-index:0;
+  }
 
   #overlay {
     position:fixed; inset:0; z-index:20;
@@ -41,6 +50,9 @@
 </style>
 </head>
 <body>
+
+<!-- カメラ映像（自前で srcObject を割り当てる） -->
+<video id="cam" playsinline autoplay muted></video>
 
 <div id="hud">
   <span id="hud-cam">カメラ: —</span> ·
@@ -157,61 +169,69 @@
       .catch(function (e) { setErr("GeoJSON読込エラー: " + e); });
   }
 
-  // ---- シーン構築（権限取得の後）-------------------------------------
-  function buildScene() {
+  // ---- A-Frame の透過オーバーレイを構築（カメラ表示は担わせない）------
+  function buildOverlay() {
     var scene = document.createElement("a-scene");
     scene.setAttribute("vr-mode-ui", "enabled: false");
-    scene.setAttribute("loading-screen", "enabled: false"); // 青いローディング画面を出さない
-    scene.setAttribute("arjs", "sourceType: webcam; debugUIEnabled: false;");
-    scene.setAttribute("renderer", "antialias: true; alpha: true;");
+    scene.setAttribute("loading-screen", "enabled: false");
+    scene.setAttribute("embedded", "");
+    scene.setAttribute("renderer", "alpha: true; antialias: true");
 
     var cam = document.createElement("a-camera");
     cam.setAttribute("look-controls-enabled", "false");
+    cam.setAttribute("wasd-controls-enabled", "false");
+    // 方位（deviceorientation）でカメラを回す
     cam.setAttribute("arjs-device-orientation-controls", "smoothingFactor: 0.1");
-    // positionMinAccuracy 既定は100m。屋内など精度が悪いと測位が棄却され配置されない。
-    // テスト中は大きくして棄却を無効化する（屋外運用では100前後に戻す）。
-    cam.setAttribute("gps-new-camera", "gpsMinDistance: 5; positionMinAccuracy: 100000");
+    // GPSでカメラのワールド座標を決める
+    cam.setAttribute("gps-new-camera", "gpsMinDistance: 5");
     scene.appendChild(cam);
     document.body.appendChild(scene);
 
-    // カメラ映像が読み込まれたら通知（AR.js は window に発火する）
-    window.addEventListener("arjs-video-loaded", function () { setCam("起動"); setErr(""); });
-
-    // 診断用に、AR.js とは別に生のGPSをHUDへ表示する（精度・権限エラーの可視化）
-    if (navigator.geolocation) {
-      navigator.geolocation.watchPosition(
-        function (pos) {
-          var c = pos.coords;
-          setGps(c.latitude.toFixed(6) + ", " + c.longitude.toFixed(6) + " (\u00b1" + Math.round(c.accuracy) + "m)");
-        },
-        function (err) { setErr("GPS\u30a8\u30e9\u30fc: " + err.code + " " + err.message); },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
-      );
-    }
+    cam.addEventListener("gps-camera-update-position", function (e) {
+      if (e.detail && e.detail.position) {
+        var d = e.detail.position;
+        setGps(d.latitude.toFixed(6) + ", " + d.longitude.toFixed(6));
+      }
+    });
 
     loadPlaces(scene);
 
-    // 一定時間カメラが起動しなければ警告
     setTimeout(function () {
-      if (document.getElementById("hud-cam").textContent.indexOf("起動") === -1) {
-        setErr("カメラが起動しません。カメラ許可とHTTPSを確認してください。");
+      if (document.getElementById("hud-gps").textContent.indexOf(",") === -1) {
+        setErr("GPSを取得できません。屋外で位置情報を許可してください。");
       }
-    }, 8000);
+    }, 10000);
   }
 
-  // ---- 開始：方位・モーションの権限をこのタップ内で取得する -----------
-  // カメラ（getUserMedia）は AR.js に一度だけ取得させる。ここで事前取得して停止すると、
-  // iOS では再取得が黒画面になることがあるため、二重取得しない。
+  // ---- カメラ映像を自前で取得して背景に表示する ----------------------
+  function startCamera() {
+    return navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false })
+      .then(function (stream) {
+        var v = document.getElementById("cam");
+        v.srcObject = stream;
+        var play = v.play();
+        setCam("起動");
+        return play && play.then ? play.catch(function(){}) : null;
+      });
+  }
+
+  // ---- 開始（すべてこのタップの中で呼ぶ）-----------------------------
   document.getElementById("start").addEventListener("click", function () {
     setCam("要求中");
-    var promises = [];
+    // iOS の方位・モーション権限（タップ内で発火）
     var DO = window.DeviceOrientationEvent, DM = window.DeviceMotionEvent;
-    if (DO && typeof DO.requestPermission === "function") promises.push(DO.requestPermission());
-    if (DM && typeof DM.requestPermission === "function") promises.push(DM.requestPermission());
-    Promise.allSettled(promises).then(function () {
-      document.getElementById("overlay").style.display = "none";
-      buildScene();
-    });
+    if (DO && typeof DO.requestPermission === "function") DO.requestPermission().catch(function(){});
+    if (DM && typeof DM.requestPermission === "function") DM.requestPermission().catch(function(){});
+    // カメラをタップ内で取得（単体テストと同じ経路）
+    startCamera()
+      .then(function () {
+        document.getElementById("overlay").style.display = "none";
+        buildOverlay();
+      })
+      .catch(function (e) {
+        setErr("カメラ不可: " + (e.name || e));
+      });
   });
 </script>
 </body>
