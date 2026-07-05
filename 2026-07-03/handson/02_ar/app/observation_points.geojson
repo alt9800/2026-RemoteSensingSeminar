@@ -1,9 +1,7 @@
 {
   "type": "FeatureCollection",
   "properties": {
-    "note": "現在地テスト用。会場データは faculty/readme.md のスクリプトで再生成する。",
-    "base_lat": 35.17654,
-    "base_lon": 136.89573
+    "note": "現在地の方位確認セット＋名古屋城・名古屋駅の観測セット。会場データは faculty のスクリプトで再生成。"
   },
   "features": [
     {
@@ -12,14 +10,82 @@
         "type": "Point",
         "coordinates": [
           136.89573,
-          35.1768113
+          35.1766485
+        ]
+      },
+      "properties": {
+        "name": "北 (N) 12m",
+        "type": "debug",
+        "ndvi": 0.88,
+        "height_m": 3.0,
+        "site": "方位確認"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          136.8958619,
+          35.17654
+        ]
+      },
+      "properties": {
+        "name": "東 (E) 12m",
+        "type": "debug",
+        "ndvi": 0.41,
+        "height_m": 3.0,
+        "site": "方位確認"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          136.89573,
+          35.1764315
+        ]
+      },
+      "properties": {
+        "name": "南 (S) 12m",
+        "type": "debug",
+        "ndvi": -0.08,
+        "height_m": 3.0,
+        "site": "方位確認"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          136.8955981,
+          35.17654
+        ]
+      },
+      "properties": {
+        "name": "西 (W) 12m",
+        "type": "debug",
+        "ndvi": 0.73,
+        "height_m": 3.0,
+        "site": "方位確認"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          136.8996883,
+          35.1850214
         ]
       },
       "properties": {
         "name": "圃場A（水稲）",
         "type": "farmland",
         "height_m": 1.5,
-        "site": "現在地テスト",
+        "site": "名古屋城周辺",
         "ndvi": 0.82
       }
     },
@@ -28,15 +94,15 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          136.8960597,
-          35.17654
+          136.900018,
+          35.1847501
         ]
       },
       "properties": {
         "name": "圃場B（畑地）",
         "type": "farmland",
         "height_m": 1.5,
-        "site": "現在地テスト",
+        "site": "名古屋城周辺",
         "ndvi": 0.41
       }
     },
@@ -45,15 +111,15 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          136.8958949,
-          35.1763139
+          136.8998532,
+          35.184524
         ]
       },
       "properties": {
         "name": "防災重点ため池",
         "type": "pond",
         "height_m": 0.5,
-        "site": "現在地テスト",
+        "site": "名古屋城周辺",
         "ndvi": -0.08
       }
     },
@@ -62,15 +128,15 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          136.8954552,
-          35.1767209
+          136.8994135,
+          35.184931
         ]
       },
       "properties": {
         "name": "林縁観測点",
         "type": "forest",
         "height_m": 3.0,
-        "site": "現在地テスト",
+        "site": "名古屋城周辺",
         "ndvi": 0.88
       }
     },
@@ -79,15 +145,15 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          136.8956201,
-          35.1762687
+          136.8995784,
+          35.1844788
         ]
       },
       "properties": {
         "name": "定点カメラ",
         "type": "sensor",
         "height_m": 2.0,
-        "site": "現在地テスト"
+        "site": "名古屋城周辺"
       }
     },
     {
@@ -97,24 +163,24 @@
         "coordinates": [
           [
             [
-              136.8959498,
-              35.176947
+              136.8999081,
+              35.1851571
             ],
             [
-              136.8961696,
-              35.176947
+              136.9001279,
+              35.1851571
             ],
             [
-              136.8961696,
-              35.1767661
+              136.9001279,
+              35.1849762
             ],
             [
-              136.8959498,
-              35.1767661
+              136.8999081,
+              35.1849762
             ],
             [
-              136.8959498,
-              35.176947
+              136.8999081,
+              35.1851571
             ]
           ]
         ]
@@ -124,7 +190,128 @@
         "type": "farmland_parcel",
         "ndvi": 0.73,
         "height_m": 2.0,
-        "site": "現在地テスト"
+        "site": "名古屋城周辺"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          136.8815369,
+          35.1711863
+        ]
+      },
+      "properties": {
+        "name": "圃場A（水稲）",
+        "type": "farmland",
+        "height_m": 1.5,
+        "site": "名古屋駅周辺",
+        "ndvi": 0.82
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          136.8818666,
+          35.170915
+        ]
+      },
+      "properties": {
+        "name": "圃場B（畑地）",
+        "type": "farmland",
+        "height_m": 1.5,
+        "site": "名古屋駅周辺",
+        "ndvi": 0.41
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          136.8817017,
+          35.1706889
+        ]
+      },
+      "properties": {
+        "name": "防災重点ため池",
+        "type": "pond",
+        "height_m": 0.5,
+        "site": "名古屋駅周辺",
+        "ndvi": -0.08
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          136.8812622,
+          35.1710959
+        ]
+      },
+      "properties": {
+        "name": "林縁観測点",
+        "type": "forest",
+        "height_m": 3.0,
+        "site": "名古屋駅周辺",
+        "ndvi": 0.88
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          136.881427,
+          35.1706437
+        ]
+      },
+      "properties": {
+        "name": "定点カメラ",
+        "type": "sensor",
+        "height_m": 2.0,
+        "site": "名古屋駅周辺"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              136.8817567,
+              35.171322
+            ],
+            [
+              136.8819765,
+              35.171322
+            ],
+            [
+              136.8819765,
+              35.1711411
+            ],
+            [
+              136.8817567,
+              35.1711411
+            ],
+            [
+              136.8817567,
+              35.171322
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "name": "圃場区画C",
+        "type": "farmland_parcel",
+        "ndvi": 0.73,
+        "height_m": 2.0,
+        "site": "名古屋駅周辺"
       }
     }
   ]
