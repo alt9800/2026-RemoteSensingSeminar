@@ -1,7 +1,9 @@
 {
   "type": "FeatureCollection",
   "properties": {
-    "note": "4地点分のダミー観測データ。当日は該当地点の実測GPSに合わせて調整可。"
+    "note": "現在地テスト用。会場データは faculty/readme.md のスクリプトで再生成する。",
+    "base_lat": 35.17654,
+    "base_lon": 136.89573
   },
   "features": [
     {
@@ -9,16 +11,15 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          131.3963647,
-          34.093963
+          136.89573,
+          35.1768113
         ]
       },
       "properties": {
         "name": "圃場A（水稲）",
-        "site": "新山口駅周辺",
         "type": "farmland",
         "height_m": 1.5,
-        "note": "生育良好。近赤外の反射が高い",
+        "site": "現在地テスト",
         "ndvi": 0.82
       }
     },
@@ -27,16 +28,15 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          131.3966901,
-          34.0936917
+          136.8960597,
+          35.17654
         ]
       },
       "properties": {
         "name": "圃場B（畑地）",
-        "site": "新山口駅周辺",
         "type": "farmland",
         "height_m": 1.5,
-        "note": "作付け直後。土壌露出が多い",
+        "site": "現在地テスト",
         "ndvi": 0.41
       }
     },
@@ -45,16 +45,15 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          131.3965274,
-          34.0934656
+          136.8958949,
+          35.1763139
         ]
       },
       "properties": {
         "name": "防災重点ため池",
-        "site": "新山口駅周辺",
         "type": "pond",
         "height_m": 0.5,
-        "note": "水域。NDVIは負値",
+        "site": "現在地テスト",
         "ndvi": -0.08
       }
     },
@@ -63,16 +62,15 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          131.3960935,
-          34.0938726
+          136.8954552,
+          35.1767209
         ]
       },
       "properties": {
         "name": "林縁観測点",
-        "site": "新山口駅周辺",
         "type": "forest",
         "height_m": 3.0,
-        "note": "常緑広葉樹。年間を通じ高NDVI",
+        "site": "現在地テスト",
         "ndvi": 0.88
       }
     },
@@ -81,16 +79,15 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          131.3962562,
-          34.0934204
+          136.8956201,
+          35.1762687
         ]
       },
       "properties": {
         "name": "定点カメラ",
-        "site": "新山口駅周辺",
         "type": "sensor",
         "height_m": 2.0,
-        "note": "地上設置の観測機器"
+        "site": "現在地テスト"
       }
     },
     {
@@ -100,416 +97,34 @@
         "coordinates": [
           [
             [
-              131.3965817,
-              34.0940987
+              136.8959498,
+              35.176947
             ],
             [
-              131.3967986,
-              34.0940987
+              136.8961696,
+              35.176947
             ],
             [
-              131.3967986,
-              34.0939178
+              136.8961696,
+              35.1767661
             ],
             [
-              131.3965817,
-              34.0939178
+              136.8959498,
+              35.1767661
             ],
             [
-              131.3965817,
-              34.0940987
+              136.8959498,
+              35.176947
             ]
           ]
         ]
       },
       "properties": {
         "name": "圃場区画C",
-        "site": "新山口駅周辺",
         "type": "farmland_parcel",
+        "ndvi": 0.73,
         "height_m": 2.0,
-        "note": "NDVIに応じ押し出す",
-        "ndvi": 0.73
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          131.4605191,
-          34.1600725
-        ]
-      },
-      "properties": {
-        "name": "圃場A（水稲）",
-        "site": "湯田温泉駅周辺",
-        "type": "farmland",
-        "height_m": 1.5,
-        "note": "生育良好。近赤外の反射が高い",
-        "ndvi": 0.82
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          131.4608448,
-          34.1598012
-        ]
-      },
-      "properties": {
-        "name": "圃場B（畑地）",
-        "site": "湯田温泉駅周辺",
-        "type": "farmland",
-        "height_m": 1.5,
-        "note": "作付け直後。土壌露出が多い",
-        "ndvi": 0.41
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          131.4606819,
-          34.1595751
-        ]
-      },
-      "properties": {
-        "name": "防災重点ため池",
-        "site": "湯田温泉駅周辺",
-        "type": "pond",
-        "height_m": 0.5,
-        "note": "水域。NDVIは負値",
-        "ndvi": -0.08
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          131.4602477,
-          34.1599821
-        ]
-      },
-      "properties": {
-        "name": "林縁観測点",
-        "site": "湯田温泉駅周辺",
-        "type": "forest",
-        "height_m": 3.0,
-        "note": "常緑広葉樹。年間を通じ高NDVI",
-        "ndvi": 0.88
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          131.4604105,
-          34.1595299
-        ]
-      },
-      "properties": {
-        "name": "定点カメラ",
-        "site": "湯田温泉駅周辺",
-        "type": "sensor",
-        "height_m": 2.0,
-        "note": "地上設置の観測機器"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": [
-          [
-            [
-              131.4607362,
-              34.1602082
-            ],
-            [
-              131.4609533,
-              34.1602082
-            ],
-            [
-              131.4609533,
-              34.1600273
-            ],
-            [
-              131.4607362,
-              34.1600273
-            ],
-            [
-              131.4607362,
-              34.1602082
-            ]
-          ]
-        ]
-      },
-      "properties": {
-        "name": "圃場区画C",
-        "site": "湯田温泉駅周辺",
-        "type": "farmland_parcel",
-        "height_m": 2.0,
-        "note": "NDVIに応じ押し出す",
-        "ndvi": 0.73
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          131.2424848,
-          33.9586375
-        ]
-      },
-      "properties": {
-        "name": "圃場A（水稲）",
-        "site": "宇部新川駅周辺",
-        "type": "farmland",
-        "height_m": 1.5,
-        "note": "生育良好。近赤外の反射が高い",
-        "ndvi": 0.82
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          131.2428097,
-          33.9583662
-        ]
-      },
-      "properties": {
-        "name": "圃場B（畑地）",
-        "site": "宇部新川駅周辺",
-        "type": "farmland",
-        "height_m": 1.5,
-        "note": "作付け直後。土壌露出が多い",
-        "ndvi": 0.41
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          131.2426473,
-          33.9581401
-        ]
-      },
-      "properties": {
-        "name": "防災重点ため池",
-        "site": "宇部新川駅周辺",
-        "type": "pond",
-        "height_m": 0.5,
-        "note": "水域。NDVIは負値",
-        "ndvi": -0.08
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          131.242214,
-          33.9585471
-        ]
-      },
-      "properties": {
-        "name": "林縁観測点",
-        "site": "宇部新川駅周辺",
-        "type": "forest",
-        "height_m": 3.0,
-        "note": "常緑広葉樹。年間を通じ高NDVI",
-        "ndvi": 0.88
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          131.2423765,
-          33.9580949
-        ]
-      },
-      "properties": {
-        "name": "定点カメラ",
-        "site": "宇部新川駅周辺",
-        "type": "sensor",
-        "height_m": 2.0,
-        "note": "地上設置の観測機器"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": [
-          [
-            [
-              131.2427014,
-              33.9587732
-            ],
-            [
-              131.242918,
-              33.9587732
-            ],
-            [
-              131.242918,
-              33.9585923
-            ],
-            [
-              131.2427014,
-              33.9585923
-            ],
-            [
-              131.2427014,
-              33.9587732
-            ]
-          ]
-        ]
-      },
-      "properties": {
-        "name": "圃場区画C",
-        "site": "宇部新川駅周辺",
-        "type": "farmland_parcel",
-        "height_m": 2.0,
-        "note": "NDVIに応じ押し出す",
-        "ndvi": 0.73
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          131.2983754,
-          33.9837745
-        ]
-      },
-      "properties": {
-        "name": "圃場A（水稲）",
-        "site": "宇部市大沢（提出地点・陸側）",
-        "type": "farmland",
-        "height_m": 1.5,
-        "note": "生育良好。近赤外の反射が高い",
-        "ndvi": 0.82
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          131.2980504,
-          33.9835936
-        ]
-      },
-      "properties": {
-        "name": "圃場B（畑地）",
-        "site": "宇部市大沢（提出地点・陸側）",
-        "type": "farmland",
-        "height_m": 1.5,
-        "note": "作付け直後。土壌露出が多い",
-        "ndvi": 0.41
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          131.2981587,
-          33.9833223
-        ]
-      },
-      "properties": {
-        "name": "防災重点ため池",
-        "site": "宇部市大沢（提出地点・陸側）",
-        "type": "pond",
-        "height_m": 0.5,
-        "note": "水域。NDVIは負値",
-        "ndvi": -0.08
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          131.2981046,
-          33.9837293
-        ]
-      },
-      "properties": {
-        "name": "林縁観測点",
-        "site": "宇部市大沢（提出地点・陸側）",
-        "type": "forest",
-        "height_m": 3.0,
-        "note": "常緑広葉樹。年間を通じ高NDVI",
-        "ndvi": 0.88
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          131.2982887,
-          33.9832771
-        ]
-      },
-      "properties": {
-        "name": "定点カメラ",
-        "site": "宇部市大沢（提出地点・陸側）",
-        "type": "sensor",
-        "height_m": 2.0,
-        "note": "地上設置の観測機器"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": [
-          [
-            [
-              131.2981587,
-              33.9839101
-            ],
-            [
-              131.2979421,
-              33.9839101
-            ],
-            [
-              131.2979421,
-              33.9837293
-            ],
-            [
-              131.2981587,
-              33.9837293
-            ],
-            [
-              131.2981587,
-              33.9839101
-            ]
-          ]
-        ]
-      },
-      "properties": {
-        "name": "圃場区画C",
-        "site": "宇部市大沢（提出地点・陸側）",
-        "type": "farmland_parcel",
-        "height_m": 2.0,
-        "note": "NDVIに応じ押し出す",
-        "ndvi": 0.73
+        "site": "現在地テスト"
       }
     }
   ]
