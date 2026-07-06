@@ -112,7 +112,7 @@
     card.setAttribute("position", "0 " + elev + " 0");
     card.setAttribute("face-camera", "");
     var plane = document.createElement("a-plane");
-    plane.setAttribute("color", "#F8FAFB"); plane.setAttribute("opacity", "0.9");
+    plane.setAttribute("material", "shader: flat; color: #F8FAFB; opacity: 0.9");
     plane.setAttribute("width", "10"); plane.setAttribute("height", "2.4");
     var t = document.createElement("a-text");
     t.setAttribute("value", text); t.setAttribute("align", "center");
@@ -127,8 +127,8 @@
     wrap.setAttribute("gps-new-entity-place", "latitude: " + lat + "; longitude: " + lon);
     var h = p.height_m || 1.5;
     var box = document.createElement("a-box");
-    box.setAttribute("color", ndviColor(p.ndvi)); box.setAttribute("opacity", "0.85");
-    box.setAttribute("scale", "2 " + h + " 2"); box.setAttribute("position", "0 " + (h/2) + " 0");
+    box.setAttribute("material", "shader: flat; color: " + ndviColor(p.ndvi) + "; opacity: 0.95");
+    box.setAttribute("scale", "4 " + h + " 4"); box.setAttribute("position", "0 " + (h/2) + " 0");
     wrap.appendChild(box);
     wrap.appendChild(makeCard(labelText(p), h + 2.2));
     scene.appendChild(wrap);
@@ -147,7 +147,7 @@
     var wrap = document.createElement("a-entity");
     wrap.setAttribute("gps-new-entity-place", "latitude: " + lat + "; longitude: " + lon);
     var box = document.createElement("a-box");
-    box.setAttribute("color", ndviColor(p.ndvi)); box.setAttribute("opacity", "0.5");
+    box.setAttribute("material", "shader: flat; color: " + ndviColor(p.ndvi) + "; opacity: 0.5");
     box.setAttribute("width", width.toFixed(1)); box.setAttribute("depth", depth.toFixed(1));
     box.setAttribute("height", h); box.setAttribute("position", "0 " + (h/2) + " 0");
     wrap.appendChild(box);
@@ -187,6 +187,12 @@
     // positionMinAccuracy 既定は100m。屋内など精度が悪いと測位が棄却され配置されないため、
     // テスト中は大きくして棄却を無効化する（屋外運用では100前後に戻す）。
     cam.setAttribute("gps-new-camera", "gpsMinDistance: 5; positionMinAccuracy: 100000");
+    // レンダリング確認用：カメラ正面2mに常時出す箱（GPS非依存）
+    var probe = document.createElement("a-box");
+    probe.setAttribute("position", "0 0 -2");
+    probe.setAttribute("scale", "0.4 0.4 0.4");
+    probe.setAttribute("material", "shader: flat; color: #FF3B30");
+    cam.appendChild(probe);
     scene.appendChild(cam);
     document.body.appendChild(scene);
 
