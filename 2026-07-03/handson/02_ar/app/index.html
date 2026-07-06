@@ -190,6 +190,8 @@
     scene.appendChild(cam);
     document.body.appendChild(scene);
 
+    loadPlaces(scene); // GeoJSONを読み込みエンティティを配置する（この呼び出しが抜けていた）
+
     // 診断用に、AR.js とは別に生のGPSをHUDへ表示する（精度・権限エラーの可視化）
     if (navigator.geolocation) {
       navigator.geolocation.watchPosition(
