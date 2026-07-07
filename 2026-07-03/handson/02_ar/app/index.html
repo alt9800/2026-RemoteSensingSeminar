@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="color-scheme" content="light">
-<title>ハンズオン② 観測ポイントAR（手動GPS配置版）</title>
+<title>ハンズオン② 観測ポイントAR（手動GPS配置・フットプリント対応版）</title>
 
 <!-- A-Frame 1.6.0 と AR.js 3.4.7。AR.jsは方位（arjs-device-orientation-controls）のみに使う。
      GPSでの位置合わせは gps-new-camera / gps-new-entity-place を使わず、自前計算で行う。 -->
@@ -31,10 +31,13 @@
   #overlay {
     position:fixed; inset:0; z-index:20;
     background:var(--bg); display:flex; align-items:center; justify-content:center; padding:24px;
+    overflow-y:auto;
   }
   #overlay .card { width:100%; max-width:420px; border:1px solid var(--line); padding:24px; }
   #overlay h1 { font-size:1.15rem; margin:0 0 10px; }
   #overlay p { font-size:.86rem; color:var(--sub); margin:0 0 14px; line-height:1.6; }
+  #overlay label { display:block; font-size:.82rem; margin:0 0 6px; }
+  #geojson-file { font-size:.8rem; width:100%; margin:0 0 16px; }
   #start { font:inherit; width:100%; padding:12px 18px; background:var(--bg); color:var(--ink);
     border:1.5px solid var(--ink); border-radius:2px; cursor:pointer; }
   #start:active { background:var(--panel); }
@@ -67,8 +70,12 @@
 
 <div id="overlay">
   <div class="card">
-    <h1>観測ポイントAR（手動GPS配置版）</h1>
-    <p>カメラと位置情報を使い、周囲の観測ポイントをカメラ映像に重ねて表示します。屋外で、周囲の安全を確認してから開始してください。</p>
+    <h1>観測ポイントAR（手動GPS配置・フットプリント対応版）</h1>
+    <p>カメラと位置情報を使い、周囲の観測ポイントや区画をカメラ映像に重ねて表示します。屋外で、周囲の安全を確認してから開始してください。</p>
+
+    <label for="geojson-file">GeoJSONファイル（任意。指定がなければ observation_points.geojson を読み込む）</label>
+    <input type="file" id="geojson-file" accept=".geojson,.json,application/geo+json,application/json">
+
     <button id="start">開始</button>
     <p class="hint">iPhoneは「動作と方向」「カメラ」「位置情報」の許可が必要です。</p>
   </div>
@@ -100,7 +107,7 @@
     });
   }
 
-  // ---- NDVI → 色 -----------------------------------------------------
+  // ---- NDVI → 色（値がない場合は灰色。フットプリントのデバッグ表示にも流用する） ----
   function lerpHex(a, b, t) {
     var pa = [1,3,5].map(function(i){return parseInt(a.substr(i,2),16);});
     var pb = [1,3,5].map(function(i){return parseInt(b.substr(i,2),16);});
@@ -144,6 +151,51 @@
     return card;
   }
 
+  // ---- フットプリントの輪郭線と立ち上げ（押し出し）を描画するコンポーネント ----
+  // verts は centroid からの相対オフセット [east, north]（メートル）の配列を
+  // JSON文字列にしたもの。ExtrudeGeometryはXY平面の形状をZ方向へ押し出すため、
+  // shape側は (east, north) を渡し、メッシュを X軸まわりに-90度回転させることで
+  // 押し出し方向を鉛直（Y）に、north方向をA-Frame規約のz=-northに一致させている。
+  AFRAME.registerComponent("footprint", {
+    schema: {
+      verts: { type: "string" },
+      height: { type: "number", default: 3 },
+      color: { type: "string", default: "#8A8F98" }
+    },
+    init: function () {
+      var data = this.data;
+      var pts = JSON.parse(data.verts); // [[east, north], ...]
+
+      var shapePts = pts.map(function (p) { return new THREE.Vector2(p[0], p[1]); });
+      var shape = new THREE.Shape(shapePts);
+
+      var extrudeGeom = new THREE.ExtrudeGeometry(shape, { depth: data.height, bevelEnabled: false, steps: 1 });
+      var fillMat = new THREE.MeshBasicMaterial({
+        color: data.color, transparent: true, opacity: 0.35, side: THREE.DoubleSide
+      });
+      var fillMesh = new THREE.Mesh(extrudeGeom, fillMat);
+      fillMesh.rotation.x = -Math.PI / 2;
+      this.el.setObject3D("fill", fillMesh);
+
+      // フットプリント輪郭。地面（y=0）と天面（y=height）の両方に線を引く。
+      function ringPositions(y) {
+        var arr = [];
+        pts.forEach(function (p) { arr.push(p[0], y, -p[1]); });
+        arr.push(pts[0][0], y, -pts[0][1]); // 始点に戻して閉じる
+        return new Float32Array(arr);
+      }
+      var lineMat = new THREE.LineBasicMaterial({ color: data.color });
+
+      var groundGeom = new THREE.BufferGeometry();
+      groundGeom.setAttribute("position", new THREE.BufferAttribute(ringPositions(0), 3));
+      this.el.setObject3D("outline-ground", new THREE.Line(groundGeom, lineMat));
+
+      var topGeom = new THREE.BufferGeometry();
+      topGeom.setAttribute("position", new THREE.BufferAttribute(ringPositions(data.height), 3));
+      this.el.setObject3D("outline-top", new THREE.Line(topGeom, lineMat));
+    }
+  });
+
   // ---- 地物を配置（gps-new-entity-placeは使わず、position計算は自前）----
   function addPoint(scene, lat, lon, p) {
     var wrap = document.createElement("a-entity");
@@ -152,50 +204,68 @@
     box.setAttribute("material", "shader: flat; color: " + ndviColor(p.ndvi) + "; opacity: 0.95");
     box.setAttribute("scale", "4 " + h + " 4"); box.setAttribute("position", "0 " + (h/2) + " 0");
     wrap.appendChild(box);
-    wrap.appendChild(makeCard(labelText(p), h + 2.2));
+    wrap.appendChild(makeCard(labelText({ name: p.name || "地点", ndvi: p.ndvi }), h + 2.2));
     scene.appendChild(wrap);
     placedEntities.push({ el: wrap, lat: lat, lon: lon });
   }
 
-  function addPolygon(scene, ring, p) {
-    var pts = ring.slice(0, ring.length - 1);
+  function addPolygon(scene, ring, p, index) {
+    var pts = ring.slice(0, ring.length - 1); // 閉じるための終点重複を除く
     var lat = 0, lon = 0;
     pts.forEach(function (c) { lon += c[0]; lat += c[1]; });
     lat /= pts.length; lon /= pts.length;
-    var lats = pts.map(function (c){return c[1];}), lons = pts.map(function (c){return c[0];});
-    var mLat = 110574, mLon = 111320 * Math.cos(lat * Math.PI/180);
-    var depth = (Math.max.apply(null,lats) - Math.min.apply(null,lats)) * mLat;
-    var width = (Math.max.apply(null,lons) - Math.min.apply(null,lons)) * mLon;
-    var h = p.height_m || 2;
+
+    var mLat = 110574, mLon = 111320 * Math.cos(lat * Math.PI / 180);
+    var localVerts = pts.map(function (c) {
+      var north = (c[1] - lat) * mLat;
+      var east  = (c[0] - lon) * mLon;
+      return [east, north];
+    });
+
+    var h = p.height_m || 3;
+    var color = ndviColor(p.ndvi);
+    var name = p.name || ("footprint " + (index + 1));
+
     var wrap = document.createElement("a-entity");
-    var box = document.createElement("a-box");
-    box.setAttribute("material", "shader: flat; color: " + ndviColor(p.ndvi) + "; opacity: 0.5");
-    box.setAttribute("width", width.toFixed(1)); box.setAttribute("depth", depth.toFixed(1));
-    box.setAttribute("height", h); box.setAttribute("position", "0 " + (h/2) + " 0");
-    wrap.appendChild(box);
-    wrap.appendChild(makeCard(labelText(p), h + 2.2));
+    wrap.setAttribute("footprint", { verts: JSON.stringify(localVerts), height: h, color: color });
+    wrap.appendChild(makeCard(labelText({ name: name, ndvi: p.ndvi }), h + 1.5));
     scene.appendChild(wrap);
     placedEntities.push({ el: wrap, lat: lat, lon: lon });
   }
 
-  function loadPlaces(scene) {
-    fetch("./observation_points.geojson")
+  function renderFeatures(scene, geojson) {
+    var n = 0;
+    (geojson.features || []).forEach(function (f, i) {
+      var g = f.geometry, p = f.properties || {};
+      if (!g) return;
+      if (g.type === "Point") { addPoint(scene, g.coordinates[1], g.coordinates[0], p); n++; }
+      else if (g.type === "Polygon") { addPolygon(scene, g.coordinates[0], p, i); n++; }
+    });
+    setData(n + " 件");
+    updatePositions(); // 既にGPS取得済みならこの時点で反映
+  }
+
+  function loadPlacesFromFile(scene, file) {
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        renderFeatures(scene, JSON.parse(e.target.result));
+      } catch (err) {
+        setErr("GeoJSON解析エラー: " + err);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function loadPlacesFromUrl(scene, url) {
+    fetch(url)
       .then(function (r) { return r.json(); })
-      .then(function (gj) {
-        var n = 0;
-        gj.features.forEach(function (f) {
-          var g = f.geometry, p = f.properties;
-          if (g.type === "Point") { addPoint(scene, g.coordinates[1], g.coordinates[0], p); n++; }
-          else if (g.type === "Polygon") { addPolygon(scene, g.coordinates[0], p); n++; }
-        });
-        setData(n + " 件");
-        updatePositions(); // 既にGPS取得済みならこの時点で反映
-      })
+      .then(function (gj) { renderFeatures(scene, gj); })
       .catch(function (e) { setErr("GeoJSON読込エラー: " + e); });
   }
 
   // ---- オーバーレイ構築。gps-new-camera は使わず、方位のみAR.jsに任せる ----
-  function buildOverlay() {
+  function buildOverlay(selectedFile) {
     var scene = document.createElement("a-scene");
     scene.setAttribute("vr-mode-ui", "enabled: false");
     scene.setAttribute("loading-screen", "enabled: false");
@@ -217,7 +287,11 @@
     scene.appendChild(cam);
     document.body.appendChild(scene);
 
-    loadPlaces(scene);
+    if (selectedFile) {
+      loadPlacesFromFile(scene, selectedFile);
+    } else {
+      loadPlacesFromUrl(scene, "./observation_points.geojson");
+    }
 
     if (navigator.geolocation) {
       navigator.geolocation.watchPosition(
@@ -246,6 +320,9 @@
   }
 
   document.getElementById("start").addEventListener("click", function () {
+    var fileInput = document.getElementById("geojson-file");
+    var selectedFile = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+
     setCam("要求中");
     var DO = window.DeviceOrientationEvent, DM = window.DeviceMotionEvent;
     if (DO && typeof DO.requestPermission === "function") DO.requestPermission().catch(function(){});
@@ -253,12 +330,12 @@
     startCamera()
       .then(function () {
         document.getElementById("overlay").style.display = "none";
-        buildOverlay();
+        buildOverlay(selectedFile);
       })
       .catch(function (e) {
         setErr("カメラ不可: " + (e.name || e));
         document.getElementById("overlay").style.display = "none";
-        buildOverlay();
+        buildOverlay(selectedFile);
       });
   });
 </script>
