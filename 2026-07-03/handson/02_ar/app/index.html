@@ -63,31 +63,44 @@
     z-index:25;
   }
   #minimap { position:absolute; inset:0; }
-  #minimap-tap { position:absolute; inset:0; z-index:2; background:transparent; }
+  #minimap-tap { position:absolute; inset:0; z-index:2; background:transparent; touch-action: manipulation; }
   #minimap-wrap.expanded #minimap-tap { display:none; }
   #minimap-close {
     position:absolute; top:10px; right:10px; z-index:3; display:none;
     font:14px system-ui,sans-serif; padding:8px 12px;
     background:#fff; color:var(--ink); border:1.5px solid var(--ink); border-radius:2px;
+    touch-action: manipulation;
   }
   #minimap-wrap.expanded #minimap-close { display:block; }
   .beacon-marker svg { display:block; }
 
+  html, body { touch-action: manipulation; } /* 連続タップがダブルタップズームと誤認されるのを防ぐ */
+
   #calib {
     position:fixed; z-index:12; left:12px; bottom:12px;
-    background:rgba(248,250,251,.92); border:1.5px solid var(--ink); border-radius:2px;
-    padding:8px 10px; font:12px/1.4 "IBM Plex Mono",ui-monospace,monospace;
-    display:flex; align-items:center; gap:6px; flex-wrap:wrap; max-width:min(70vw, 280px);
+    max-width:min(55vw, 220px);
   }
-  #calib button {
+  #calib-toggle {
+    font:12px "IBM Plex Mono",ui-monospace,monospace; padding:8px 10px;
+    background:rgba(248,250,251,.92); color:var(--ink);
+    border:1.5px solid var(--ink); border-radius:2px;
+    touch-action: manipulation;
+  }
+  #calib-controls {
+    display:none; margin-top:6px;
+    background:rgba(248,250,251,.95); border:1.5px solid var(--ink); border-radius:2px;
+    padding:8px; gap:6px; flex-wrap:wrap;
+  }
+  #calib.expanded #calib-controls { display:flex; }
+  #calib-controls button {
     font:12px system-ui,sans-serif; padding:6px 8px; background:#fff; color:var(--ink);
-    border:1px solid var(--ink); border-radius:2px;
+    border:1px solid var(--ink); border-radius:2px; touch-action: manipulation;
   }
-  #calib-value { min-width:5em; text-align:center; }
+  #calib-value { min-width:4em; text-align:center; font:12px "IBM Plex Mono",ui-monospace,monospace; }
 
   @media (max-width:380px) {
-    #calib { font-size:11px; padding:6px 8px; gap:4px; }
-    #calib button { font-size:11px; padding:5px 6px; }
+    #calib { max-width:60vw; }
+    #calib-toggle, #calib-controls button { font-size:11px; padding:6px 7px; }
   }
 
   @media (max-width:380px) {
@@ -119,12 +132,14 @@
 </div>
 
 <div id="calib">
-  <span>方位補正</span>
-  <button data-step="-10">-10°</button>
-  <button data-step="-1">-1°</button>
-  <span id="calib-value">0°</span>
-  <button data-step="1">+1°</button>
-  <button data-step="10">+10°</button>
+  <button id="calib-toggle">方位補正 0°</button>
+  <div id="calib-controls">
+    <button data-step="-10">-10°</button>
+    <button data-step="-1">-1°</button>
+    <span id="calib-value">0°</span>
+    <button data-step="1">+1°</button>
+    <button data-step="10">+10°</button>
+  </div>
 </div>
 
 <div id="overlay">
@@ -224,7 +239,7 @@
 
   function makeLabel(uuid) {
     var card = document.createElement("a-entity");
-    card.setAttribute("position", "0 1.2 0");
+    card.setAttribute("position", "0 0.4 0"); // 地面付近に留める（以前は1.2＝目線の高さだった）
     card.setAttribute("face-camera", "");
     var plane = document.createElement("a-plane");
     plane.setAttribute("material", "shader: flat; color: #F8FAFB; opacity: 0.9");
@@ -344,12 +359,18 @@
   }
 
   // ---- 方位補正パネル。AR.js側のカメラ回転処理と本アプリの座標系との間に
-  //      体系的なズレがある場合、配置済みの地物側を反対方向に回して見た目を合わせる。----
-  document.querySelectorAll("#calib button").forEach(function (btn) {
+  //      体系的なズレがある場合、配置済みの地物側を反対方向に回して見た目を合わせる。
+  //      普段は折りたたみ、必要な時だけ展開する（ミニマップとの重なりを避けるため）。----
+  document.getElementById("calib-toggle").addEventListener("click", function () {
+    document.getElementById("calib").classList.toggle("expanded");
+  });
+  document.querySelectorAll("#calib-controls button").forEach(function (btn) {
     btn.addEventListener("click", function () {
       headingOffsetDeg += parseFloat(btn.getAttribute("data-step"));
       headingOffsetDeg = ((headingOffsetDeg % 360) + 360) % 360;
-      document.getElementById("calib-value").textContent = Math.round(headingOffsetDeg) + "\u00b0";
+      var label = Math.round(headingOffsetDeg) + "\u00b0";
+      document.getElementById("calib-value").textContent = label;
+      document.getElementById("calib-toggle").textContent = "方位補正 " + label;
       if (worldEntity) worldEntity.setAttribute("rotation", "0 " + headingOffsetDeg + " 0");
     });
   });
