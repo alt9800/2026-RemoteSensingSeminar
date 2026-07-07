@@ -4,340 +4,152 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="color-scheme" content="light">
-<title>ハンズオン② 観測ポイントAR（手動GPS配置・フットプリント対応版）</title>
-
-<!-- A-Frame 1.6.0 と AR.js 3.4.7。AR.jsは方位（arjs-device-orientation-controls）のみに使う。
-     GPSでの位置合わせは gps-new-camera / gps-new-entity-place を使わず、自前計算で行う。 -->
+<title>切り分け：arjs-device-orientation-controls有無テスト</title>
 <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
 <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
-
 <style>
-  :root {
-    --ink:#1A1A1A; --sub:#6B7280; --line:#C9CDD2; --accent:#2D7D46;
-    --bg:#FFFFFF; --panel:#F8FAFB; --warn:#B91C1C;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin:0; height:100%; }
-  body { font-family:"BIZ UDPGothic","Hiragino Sans",system-ui,sans-serif; color:var(--ink); }
-
-  #cam {
-    position:fixed; inset:0; width:100%; height:100%;
-    object-fit:cover; background:#000; z-index:0;
-  }
-  a-scene {
-    position:fixed; inset:0; width:100%; height:100%; z-index:1;
-  }
-
-  #overlay {
-    position:fixed; inset:0; z-index:20;
-    background:var(--bg); display:flex; align-items:center; justify-content:center; padding:24px;
-    overflow-y:auto;
-  }
-  #overlay .card { width:100%; max-width:420px; border:1px solid var(--line); padding:24px; }
-  #overlay h1 { font-size:1.15rem; margin:0 0 10px; }
-  #overlay p { font-size:.86rem; color:var(--sub); margin:0 0 14px; line-height:1.6; }
-  #overlay label { display:block; font-size:.82rem; margin:0 0 6px; }
-  #geojson-file { font-size:.8rem; width:100%; margin:0 0 16px; }
-  #start { font:inherit; width:100%; padding:12px 18px; background:var(--bg); color:var(--ink);
-    border:1.5px solid var(--ink); border-radius:2px; cursor:pointer; }
-  #start:active { background:var(--panel); }
-  .hint { font-size:.78rem; }
+  html, body { margin:0; height:100%; background:#000; }
+  #cam { position:fixed; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
+  a-scene { position:fixed; inset:0; width:100%; height:100%; z-index:1; }
 
   #hud {
-    position:fixed; top:0; left:0; right:0; z-index:15;
-    font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.72rem; line-height:1.5;
-    color:var(--ink); background:rgba(248,250,251,.85); padding:6px 10px; border-bottom:1px solid var(--line);
-    word-break:break-all;
+    position:fixed; top:0; left:0; right:0; z-index:10;
+    font:12px/1.6 ui-monospace,monospace; background:rgba(248,250,251,.92); padding:8px 10px;
   }
-  #hud .err { color:var(--warn); }
+  #log {
+    position:fixed; left:0; right:0; bottom:0; z-index:10;
+    max-height:35vh; overflow-y:auto;
+    font:11px/1.5 ui-monospace,monospace; background:rgba(255,255,255,.95);
+    border-top:1px solid #C9CDD2; padding:6px 8px;
+  }
+  #log div { color:#B91C1C; word-break:break-all; margin:2px 0; }
+  #log div.info { color:#1A1A1A; }
 
-  @media (max-width: 380px) {
-    #overlay .card { max-width:100%; padding:18px; }
-    #hud { font-size:.66rem; padding:5px 8px; }
+  #controls {
+    position:fixed; left:16px; right:16px; bottom:calc(35vh + 12px); z-index:11;
+    display:flex; flex-wrap:wrap; gap:8px;
+  }
+  button {
+    font:14px system-ui,sans-serif; padding:10px 14px; background:#fff; color:#111;
+    border:1.5px solid #111; border-radius:2px; flex:1 1 auto; min-width:120px;
+  }
+  button:disabled { opacity:.4; }
+
+  @media (max-width:380px) {
+    #hud { font-size:11px; padding:6px 8px; }
+    #log { font-size:10px; max-height:32vh; }
+    button { font-size:13px; padding:8px 10px; min-width:100px; }
   }
 </style>
 </head>
 <body>
-
 <video id="cam" playsinline autoplay muted></video>
 
 <div id="hud">
-  <span id="hud-cam">カメラ: —</span> ·
-  <span id="hud-gps">GPS: —</span> ·
-  <span id="hud-data">データ: —</span>
-  <span id="hud-err" class="err"></span>
+  実行中: <span id="mode">未選択</span>
 </div>
 
-<div id="overlay">
-  <div class="card">
-    <h1>観測ポイントAR（手動GPS配置・フットプリント対応版）</h1>
-    <p>カメラと位置情報を使い、周囲の観測ポイントや区画をカメラ映像に重ねて表示します。屋外で、周囲の安全を確認してから開始してください。</p>
-
-    <label for="geojson-file">GeoJSONファイル（任意。指定がなければ observation_points.geojson を読み込む）</label>
-    <input type="file" id="geojson-file" accept=".geojson,.json,application/geo+json,application/json">
-
-    <button id="start">開始</button>
-    <p class="hint">iPhoneは「動作と方向」「カメラ」「位置情報」の許可が必要です。</p>
-  </div>
+<div id="controls">
+  <button id="run-a">A: 方位コンポーネント付きで開始</button>
+  <button id="run-b">B: 方位コンポーネントなしで開始</button>
+  <button id="eruda">詳細コンソールを開く</button>
 </div>
+
+<div id="log"></div>
 
 <script>
-  function setCam(t){ document.getElementById("hud-cam").textContent = "カメラ: " + t; }
-  function setGps(t){ document.getElementById("hud-gps").textContent = "GPS: " + t; }
-  function setData(t){ document.getElementById("hud-data").textContent = "データ: " + t; }
-  function setErr(t){ document.getElementById("hud-err").textContent = t ? ("  " + t) : ""; }
-
-  // ---- 緯度経度 → メートルオフセット（自前計算。gps-new-*は使わない） -----
-  var userPos = null; // { lat, lon }
-  var placedEntities = []; // { el, lat, lon }
-
-  function calcOffset(lat, lon, uLat, uLon) {
-    var mLat = 110574;
-    var mLon = 111320 * Math.cos(uLat * Math.PI / 180);
-    var north = (lat - uLat) * mLat;
-    var east  = (lon - uLon) * mLon;
-    return { x: east, z: -north }; // -Zを北とする
+  // 画面上に直接エラーを表示する。実機接続なしで確認するための仕組み。
+  var logEl = document.getElementById("log");
+  function logLine(text, isInfo) {
+    var d = document.createElement("div");
+    if (isInfo) d.className = "info";
+    d.textContent = text;
+    logEl.appendChild(d);
+    logEl.scrollTop = logEl.scrollHeight;
   }
-
-  function updatePositions() {
-    if (!userPos) return;
-    placedEntities.forEach(function (item) {
-      var off = calcOffset(item.lat, item.lon, userPos.lat, userPos.lon);
-      item.el.setAttribute("position", off.x.toFixed(2) + " 0 " + off.z.toFixed(2));
-    });
-  }
-
-  // ---- NDVI → 色（値がない場合は灰色。フットプリントのデバッグ表示にも流用する） ----
-  function lerpHex(a, b, t) {
-    var pa = [1,3,5].map(function(i){return parseInt(a.substr(i,2),16);});
-    var pb = [1,3,5].map(function(i){return parseInt(b.substr(i,2),16);});
-    var p  = pa.map(function(v,i){return Math.round(v + (pb[i]-v)*t);});
-    return "#" + p.map(function(v){return v.toString(16).padStart(2,"0");}).join("");
-  }
-  function ndviColor(v) {
-    if (v == null) return "#8A8F98";
-    if (v < 0)     return "#2B6CB0";
-    var t = Math.max(0, Math.min(1, v));
-    return lerpHex("#C9A227", "#2D7D46", t);
-  }
-  function labelText(p) {
-    return (p.ndvi != null) ? (p.name + "  (NDVI " + p.ndvi + ")") : p.name;
-  }
-
-  // ---- ラベルを常にカメラへ向ける -------------------------------------
-  AFRAME.registerComponent("face-camera", {
-    tick: function () {
-      var cam = this.el.sceneEl && this.el.sceneEl.camera;
-      if (!cam) return;
-      var camPos = new THREE.Vector3(); cam.getWorldPosition(camPos);
-      var myPos  = new THREE.Vector3(); this.el.object3D.getWorldPosition(myPos);
-      camPos.y = myPos.y;
-      this.el.object3D.lookAt(camPos);
-    }
+  window.onerror = function (msg, src, line, col) {
+    logLine("エラー: " + msg + " (" + line + ":" + col + ")");
+  };
+  window.addEventListener("unhandledrejection", function (e) {
+    logLine("Promiseエラー: " + (e.reason && e.reason.message ? e.reason.message : e.reason));
   });
 
-  function makeCard(text, elev) {
-    var card = document.createElement("a-entity");
-    card.setAttribute("position", "0 " + elev + " 0");
-    card.setAttribute("face-camera", "");
-    var plane = document.createElement("a-plane");
-    plane.setAttribute("material", "shader: flat; color: #F8FAFB; opacity: 0.9");
-    plane.setAttribute("width", "10"); plane.setAttribute("height", "2.4");
-    var t = document.createElement("a-text");
-    t.setAttribute("value", text); t.setAttribute("align", "center");
-    t.setAttribute("color", "#111111"); t.setAttribute("width", "20");
-    t.setAttribute("position", "0 0 0.05");
-    card.appendChild(plane); card.appendChild(t);
-    return card;
-  }
-
-  // ---- フットプリントの輪郭線と立ち上げ（押し出し）を描画するコンポーネント ----
-  // verts は centroid からの相対オフセット [east, north]（メートル）の配列を
-  // JSON文字列にしたもの。ExtrudeGeometryはXY平面の形状をZ方向へ押し出すため、
-  // shape側は (east, north) を渡し、メッシュを X軸まわりに-90度回転させることで
-  // 押し出し方向を鉛直（Y）に、north方向をA-Frame規約のz=-northに一致させている。
-  AFRAME.registerComponent("footprint", {
-    schema: {
-      verts: { type: "string" },
-      height: { type: "number", default: 3 },
-      color: { type: "string", default: "#8A8F98" }
-    },
-    init: function () {
-      var data = this.data;
-      var pts = JSON.parse(data.verts); // [[east, north], ...]
-
-      var shapePts = pts.map(function (p) { return new THREE.Vector2(p[0], p[1]); });
-      var shape = new THREE.Shape(shapePts);
-
-      var extrudeGeom = new THREE.ExtrudeGeometry(shape, { depth: data.height, bevelEnabled: false, steps: 1 });
-      var fillMat = new THREE.MeshBasicMaterial({
-        color: data.color, transparent: true, opacity: 0.35, side: THREE.DoubleSide
-      });
-      var fillMesh = new THREE.Mesh(extrudeGeom, fillMat);
-      fillMesh.rotation.x = -Math.PI / 2;
-      this.el.setObject3D("fill", fillMesh);
-
-      // フットプリント輪郭。地面（y=0）と天面（y=height）の両方に線を引く。
-      function ringPositions(y) {
-        var arr = [];
-        pts.forEach(function (p) { arr.push(p[0], y, -p[1]); });
-        arr.push(pts[0][0], y, -pts[0][1]); // 始点に戻して閉じる
-        return new Float32Array(arr);
-      }
-      var lineMat = new THREE.LineBasicMaterial({ color: data.color });
-
-      var groundGeom = new THREE.BufferGeometry();
-      groundGeom.setAttribute("position", new THREE.BufferAttribute(ringPositions(0), 3));
-      this.el.setObject3D("outline-ground", new THREE.Line(groundGeom, lineMat));
-
-      var topGeom = new THREE.BufferGeometry();
-      topGeom.setAttribute("position", new THREE.BufferAttribute(ringPositions(data.height), 3));
-      this.el.setObject3D("outline-top", new THREE.Line(topGeom, lineMat));
-    }
+  document.getElementById("eruda").addEventListener("click", function () {
+    var s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/eruda";
+    s.onload = function () { eruda.init(); logLine("erudaを起動した", true); };
+    s.onerror = function () { logLine("eruda読み込み失敗（通信できない可能性）"); };
+    document.body.appendChild(s);
   });
 
-  // ---- 地物を配置（gps-new-entity-placeは使わず、position計算は自前）----
-  function addPoint(scene, lat, lon, p) {
-    var wrap = document.createElement("a-entity");
-    var h = p.height_m || 1.5;
-    var box = document.createElement("a-box");
-    box.setAttribute("material", "shader: flat; color: " + ndviColor(p.ndvi) + "; opacity: 0.95");
-    box.setAttribute("scale", "4 " + h + " 4"); box.setAttribute("position", "0 " + (h/2) + " 0");
-    wrap.appendChild(box);
-    wrap.appendChild(makeCard(labelText({ name: p.name || "地点", ndvi: p.ndvi }), h + 2.2));
-    scene.appendChild(wrap);
-    placedEntities.push({ el: wrap, lat: lat, lon: lon });
-  }
+  var sceneEl = null;
 
-  function addPolygon(scene, ring, p, index) {
-    var pts = ring.slice(0, ring.length - 1); // 閉じるための終点重複を除く
-    var lat = 0, lon = 0;
-    pts.forEach(function (c) { lon += c[0]; lat += c[1]; });
-    lat /= pts.length; lon /= pts.length;
+  function run(withOrientation) {
+    document.getElementById("run-a").disabled = true;
+    document.getElementById("run-b").disabled = true;
+    document.getElementById("mode").textContent = withOrientation ? "A（付与あり）" : "B（付与なし）";
 
-    var mLat = 110574, mLon = 111320 * Math.cos(lat * Math.PI / 180);
-    var localVerts = pts.map(function (c) {
-      var north = (c[1] - lat) * mLat;
-      var east  = (c[0] - lon) * mLon;
-      return [east, north];
-    });
-
-    var h = p.height_m || 3;
-    var color = ndviColor(p.ndvi);
-    var name = p.name || ("footprint " + (index + 1));
-
-    var wrap = document.createElement("a-entity");
-    wrap.setAttribute("footprint", { verts: JSON.stringify(localVerts), height: h, color: color });
-    wrap.appendChild(makeCard(labelText({ name: name, ndvi: p.ndvi }), h + 1.5));
-    scene.appendChild(wrap);
-    placedEntities.push({ el: wrap, lat: lat, lon: lon });
-  }
-
-  function renderFeatures(scene, geojson) {
-    var n = 0;
-    (geojson.features || []).forEach(function (f, i) {
-      var g = f.geometry, p = f.properties || {};
-      if (!g) return;
-      if (g.type === "Point") { addPoint(scene, g.coordinates[1], g.coordinates[0], p); n++; }
-      else if (g.type === "Polygon") { addPolygon(scene, g.coordinates[0], p, i); n++; }
-    });
-    setData(n + " 件");
-    updatePositions(); // 既にGPS取得済みならこの時点で反映
-  }
-
-  function loadPlacesFromFile(scene, file) {
-    var reader = new FileReader();
-    reader.onload = function (e) {
-      try {
-        renderFeatures(scene, JSON.parse(e.target.result));
-      } catch (err) {
-        setErr("GeoJSON解析エラー: " + err);
-      }
-    };
-    reader.readAsText(file);
-  }
-
-  function loadPlacesFromUrl(scene, url) {
-    fetch(url)
-      .then(function (r) { return r.json(); })
-      .then(function (gj) { renderFeatures(scene, gj); })
-      .catch(function (e) { setErr("GeoJSON読込エラー: " + e); });
-  }
-
-  // ---- オーバーレイ構築。gps-new-camera は使わず、方位のみAR.jsに任せる ----
-  function buildOverlay(selectedFile) {
-    var scene = document.createElement("a-scene");
-    scene.setAttribute("vr-mode-ui", "enabled: false");
-    scene.setAttribute("loading-screen", "enabled: false");
-    scene.setAttribute("embedded", "");
-    scene.setAttribute("renderer", "alpha: true; antialias: true");
-
-    var cam = document.createElement("a-camera");
-    cam.setAttribute("position", "0 1.6 0");
-    cam.setAttribute("look-controls-enabled", "false");
-    cam.setAttribute("wasd-controls-enabled", "false");
-    cam.setAttribute("arjs-device-orientation-controls", "smoothingFactor: 0.1");
-
-    // レンダリング確認用の固定プローブ（GPS非依存）
-    var probe = document.createElement("a-box");
-    probe.setAttribute("position", "0 0 -2");
-    probe.setAttribute("scale", "0.4 0.4 0.4");
-    probe.setAttribute("material", "shader: flat; color: #FF3B30");
-    cam.appendChild(probe);
-    scene.appendChild(cam);
-    document.body.appendChild(scene);
-
-    if (selectedFile) {
-      loadPlacesFromFile(scene, selectedFile);
-    } else {
-      loadPlacesFromUrl(scene, "./observation_points.geojson");
+    var DO = window.DeviceOrientationEvent;
+    if (DO && typeof DO.requestPermission === "function") {
+      DO.requestPermission().then(function (r) {
+        logLine("方位パーミッション: " + r, true);
+      }).catch(function (e) { logLine("方位パーミッションエラー: " + e); });
     }
 
-    if (navigator.geolocation) {
-      navigator.geolocation.watchPosition(
-        function (pos) {
-          var c = pos.coords;
-          userPos = { lat: c.latitude, lon: c.longitude };
-          setGps(c.latitude.toFixed(6) + ", " + c.longitude.toFixed(6) + " (\u00b1" + Math.round(c.accuracy) + "m)");
-          updatePositions();
-        },
-        function (err) { setErr("GPSエラー: " + err.code + " " + err.message); },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
-      );
-    }
-  }
-
-  function startCamera() {
-    return navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false })
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false })
       .then(function (stream) {
         var v = document.getElementById("cam");
-        v.srcObject = stream;
-        var play = v.play();
-        setCam("起動");
-        return play && play.then ? play.catch(function(){}) : null;
+        v.srcObject = stream; v.play();
+        logLine("カメラ起動OK", true);
+
+        if (sceneEl) { sceneEl.remove(); } // 前回のシーンが残っていれば除去する
+
+        var scene = document.createElement("a-scene");
+        scene.setAttribute("vr-mode-ui", "enabled: false");
+        scene.setAttribute("loading-screen", "enabled: false");
+        scene.setAttribute("embedded", "");
+        scene.setAttribute("renderer", "alpha: true");
+
+        var cam = document.createElement("a-camera");
+        cam.setAttribute("position", "0 1.6 0");
+        cam.setAttribute("look-controls-enabled", "false");
+        cam.setAttribute("wasd-controls-enabled", "false");
+
+        if (withOrientation) {
+          cam.setAttribute("arjs-device-orientation-controls", "smoothingFactor: 0.1");
+          logLine("arjs-device-orientation-controls を付与", true);
+        } else {
+          logLine("arjs-device-orientation-controls は付与しない", true);
+        }
+
+        var probeRed = document.createElement("a-box");
+        probeRed.setAttribute("position", "0 0 -2");
+        probeRed.setAttribute("scale", "0.5 0.5 0.5");
+        probeRed.setAttribute("material", "shader: flat; color: #FF3B30");
+        cam.appendChild(probeRed);
+        scene.appendChild(cam);
+
+        var probeGreen = document.createElement("a-box");
+        probeGreen.setAttribute("position", "0 1 -3");
+        probeGreen.setAttribute("material", "shader: flat; color: #34C759");
+        scene.appendChild(probeGreen);
+
+        scene.addEventListener("renderstart", function () { logLine("a-scene renderstart 発火", true); });
+
+        document.body.appendChild(scene);
+        sceneEl = scene;
+      })
+      .catch(function (e) {
+        logLine("カメラ不可: " + (e.name || e));
+      })
+      .finally(function () {
+        document.getElementById("run-a").disabled = false;
+        document.getElementById("run-b").disabled = false;
       });
   }
 
-  document.getElementById("start").addEventListener("click", function () {
-    var fileInput = document.getElementById("geojson-file");
-    var selectedFile = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
-
-    setCam("要求中");
-    var DO = window.DeviceOrientationEvent, DM = window.DeviceMotionEvent;
-    if (DO && typeof DO.requestPermission === "function") DO.requestPermission().catch(function(){});
-    if (DM && typeof DM.requestPermission === "function") DM.requestPermission().catch(function(){});
-    startCamera()
-      .then(function () {
-        document.getElementById("overlay").style.display = "none";
-        buildOverlay(selectedFile);
-      })
-      .catch(function (e) {
-        setErr("カメラ不可: " + (e.name || e));
-        document.getElementById("overlay").style.display = "none";
-        buildOverlay(selectedFile);
-      });
-  });
+  document.getElementById("run-a").addEventListener("click", function () { run(true); });
+  document.getElementById("run-b").addEventListener("click", function () { run(false); });
 </script>
 </body>
 </html>
