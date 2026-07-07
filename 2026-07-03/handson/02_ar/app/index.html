@@ -73,6 +73,23 @@
   #minimap-wrap.expanded #minimap-close { display:block; }
   .beacon-marker svg { display:block; }
 
+  #calib {
+    position:fixed; z-index:12; left:12px; bottom:12px;
+    background:rgba(248,250,251,.92); border:1.5px solid var(--ink); border-radius:2px;
+    padding:8px 10px; font:12px/1.4 "IBM Plex Mono",ui-monospace,monospace;
+    display:flex; align-items:center; gap:6px; flex-wrap:wrap; max-width:min(70vw, 280px);
+  }
+  #calib button {
+    font:12px system-ui,sans-serif; padding:6px 8px; background:#fff; color:var(--ink);
+    border:1px solid var(--ink); border-radius:2px;
+  }
+  #calib-value { min-width:5em; text-align:center; }
+
+  @media (max-width:380px) {
+    #calib { font-size:11px; padding:6px 8px; gap:4px; }
+    #calib button { font-size:11px; padding:5px 6px; }
+  }
+
   @media (max-width:380px) {
     #minimap-wrap:not(.expanded) { width:88px; height:88px; }
   }
@@ -99,6 +116,15 @@
   <div id="minimap"></div>
   <div id="minimap-tap"></div>
   <button id="minimap-close">閉じる</button>
+</div>
+
+<div id="calib">
+  <span>方位補正</span>
+  <button data-step="-10">-10°</button>
+  <button data-step="-1">-1°</button>
+  <span id="calib-value">0°</span>
+  <button data-step="1">+1°</button>
+  <button data-step="10">+10°</button>
 </div>
 
 <div id="overlay">
@@ -140,6 +166,14 @@
   var placedEntities = [];     // { el, lat, lon }
   var filtered = false;        // 250m絞り込みを一度実行したか
   var radiusM = 250;
+
+  var miniMap = null;
+  var beaconMarker = null;
+  var mapStyleLoaded = false;
+  var pendingParcelGeojson = null;
+
+  var worldEntity = null;      // 配置済み地物の親。方位補正の回転をここに適用する
+  var headingOffsetDeg = 0;
 
   function calcOffset(lat, lon, uLat, uLon) {
     var mLat = 110574;
@@ -205,7 +239,7 @@
     return card;
   }
 
-  function addParcel(scene, ring, anchorLat, anchorLon, uuid) {
+  function addParcel(parent, ring, anchorLat, anchorLon, uuid) {
     var pts = ring.slice(0, ring.length - 1);
     var mLat = 110574, mLon = 111320 * Math.cos(anchorLat * Math.PI / 180);
     var localVerts = pts.map(function (c) {
@@ -217,7 +251,7 @@
     var wrap = document.createElement("a-entity");
     wrap.setAttribute("parcel-outline", { verts: JSON.stringify(localVerts), color: "#2D7D46" });
     wrap.appendChild(makeLabel(uuid));
-    scene.appendChild(wrap);
+    parent.appendChild(wrap);
     placedEntities.push({ el: wrap, lat: anchorLat, lon: anchorLon });
   }
 
@@ -228,6 +262,7 @@
 
     var matched = 0;
     var minDist = null;
+    var matchedFeatures = [];
     allFeatures.forEach(function (f) {
       var p = f.properties || {};
       var lat = p.point_lat, lon = p.point_lng;
@@ -237,7 +272,8 @@
       if (off.dist > radiusM) return;
       if (!f.geometry || f.geometry.type !== "Polygon") return;
 
-      addParcel(scene, f.geometry.coordinates[0], lat, lon, p.name || p.polygon_uuid || "(不明)");
+      addParcel(worldEntity, f.geometry.coordinates[0], lat, lon, p.name || p.polygon_uuid || "(不明)");
+      matchedFeatures.push(f);
       matched++;
     });
 
@@ -247,6 +283,27 @@
     }
     setData(summary);
     updatePositions();
+
+    addParcelLayerToMap({ type: "FeatureCollection", features: matchedFeatures });
+  }
+
+  // ---- ミニマップ側に、AR側で絞り込んだ筆と同じものをGeoJSONレイヤーとして表示する ----
+  function addParcelLayerToMap(fc) {
+    if (!miniMap) return;
+    if (!mapStyleLoaded) { pendingParcelGeojson = fc; return; }
+    if (miniMap.getSource("parcels")) {
+      miniMap.getSource("parcels").setData(fc);
+    } else {
+      miniMap.addSource("parcels", { type: "geojson", data: fc });
+      miniMap.addLayer({
+        id: "parcels-fill", type: "fill", source: "parcels",
+        paint: { "fill-color": "#2D7D46", "fill-opacity": 0.25 }
+      });
+      miniMap.addLayer({
+        id: "parcels-outline", type: "line", source: "parcels",
+        paint: { "line-color": "#2D7D46", "line-width": 2 }
+      });
+    }
   }
 
   function loadGeojsonFromFile(file) {
@@ -280,7 +337,22 @@
     cam.setAttribute("wasd-controls-enabled", "false");
     cam.setAttribute("arjs-device-orientation-controls", "smoothingFactor: 0.1");
     scene.appendChild(cam);
+
+    worldEntity = document.createElement("a-entity");
+    worldEntity.setAttribute("rotation", "0 " + headingOffsetDeg + " 0");
+    scene.appendChild(worldEntity);
   }
+
+  // ---- 方位補正パネル。AR.js側のカメラ回転処理と本アプリの座標系との間に
+  //      体系的なズレがある場合、配置済みの地物側を反対方向に回して見た目を合わせる。----
+  document.querySelectorAll("#calib button").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      headingOffsetDeg += parseFloat(btn.getAttribute("data-step"));
+      headingOffsetDeg = ((headingOffsetDeg % 360) + 360) % 360;
+      document.getElementById("calib-value").textContent = Math.round(headingOffsetDeg) + "\u00b0";
+      if (worldEntity) worldEntity.setAttribute("rotation", "0 " + headingOffsetDeg + " 0");
+    });
+  });
 
   function startCamera() {
     return navigator.mediaDevices
@@ -326,7 +398,7 @@
     }
 
     // ---- MapLibreミニマップ。north-up固定（bearing:0）で、現在地と方位を反映する。----
-    var miniMap = new maplibregl.Map({
+    miniMap = new maplibregl.Map({
       container: "minimap",
       style: "https://tile.openstreetmap.jp/styles/osm-bright-ja/style.json",
       center: [130.389615, 33.591517],
@@ -335,6 +407,10 @@
       bearing: 0,
       attributionControl: false
     });
+    miniMap.on("load", function () {
+      mapStyleLoaded = true;
+      if (pendingParcelGeojson) addParcelLayerToMap(pendingParcelGeojson);
+    });
     var beaconEl = document.createElement("div");
     beaconEl.className = "beacon-marker";
     beaconEl.innerHTML =
@@ -342,7 +418,7 @@
       '<polygon points="13,0 18,10 13,7 8,10" fill="#2D7D46"></polygon>' +
       '<circle cx="13" cy="13" r="5" fill="#2D7D46" stroke="#FFFFFF" stroke-width="2"></circle>' +
       "</svg>";
-    var beaconMarker = new maplibregl.Marker({ element: beaconEl, rotationAlignment: "map" })
+    beaconMarker = new maplibregl.Marker({ element: beaconEl, rotationAlignment: "map" })
       .setLngLat([130.389615, 33.591517])
       .addTo(miniMap);
     var miniMapCentered = false;
