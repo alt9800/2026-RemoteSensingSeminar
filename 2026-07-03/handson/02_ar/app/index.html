@@ -176,11 +176,13 @@
     filtered = true;
 
     var matched = 0;
+    var minDist = null;
     allFeatures.forEach(function (f) {
       var p = f.properties || {};
       var lat = p.point_lat, lon = p.point_lng;
       if (lat == null || lon == null) return;
       var off = calcOffset(lat, lon, userPos.lat, userPos.lon);
+      if (minDist == null || off.dist < minDist) minDist = off.dist;
       if (off.dist > radiusM) return;
       if (!f.geometry || f.geometry.type !== "Polygon") return;
 
@@ -188,7 +190,11 @@
       matched++;
     });
 
-    setData(matched + " 件（全" + allFeatures.length + "件中、半径" + radiusM + "m）");
+    var summary = matched + " 件（全" + allFeatures.length + "件中、半径" + radiusM + "m）";
+    if (matched === 0 && minDist != null) {
+      summary += " / 最短" + Math.round(minDist) + "m（範囲外）";
+    }
+    setData(summary);
     updatePositions();
   }
 
