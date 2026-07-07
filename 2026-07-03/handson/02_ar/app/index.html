@@ -9,6 +9,8 @@
 <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
 <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/three.js/build/ar-threex-location-only.js"></script>
 <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
+<link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet">
 
 <style>
   :root {
@@ -44,6 +46,37 @@
   }
   #hud .err { color:var(--warn); }
 
+  #minimap-wrap {
+    position:fixed; z-index:12;
+    right:12px; bottom:12px;
+    width:clamp(96px, 30vw, 150px);
+    height:clamp(96px, 30vw, 150px);
+    border:1.5px solid var(--ink);
+    border-radius:4px;
+    overflow:hidden;
+    background:var(--panel);
+  }
+  #minimap-wrap.expanded {
+    right:0; bottom:0; left:0; top:0;
+    width:auto; height:auto;
+    border-radius:0;
+    z-index:25;
+  }
+  #minimap { position:absolute; inset:0; }
+  #minimap-tap { position:absolute; inset:0; z-index:2; background:transparent; }
+  #minimap-wrap.expanded #minimap-tap { display:none; }
+  #minimap-close {
+    position:absolute; top:10px; right:10px; z-index:3; display:none;
+    font:14px system-ui,sans-serif; padding:8px 12px;
+    background:#fff; color:var(--ink); border:1.5px solid var(--ink); border-radius:2px;
+  }
+  #minimap-wrap.expanded #minimap-close { display:block; }
+  .beacon-marker svg { display:block; }
+
+  @media (max-width:380px) {
+    #minimap-wrap:not(.expanded) { width:88px; height:88px; }
+  }
+
   @media (max-width:380px) {
     #overlay .card { max-width:100%; padding:18px; }
     #hud { font-size:.66rem; padding:5px 8px; }
@@ -57,8 +90,15 @@
 <div id="hud">
   <span id="hud-cam">カメラ: —</span> ·
   <span id="hud-gps">GPS: —</span> ·
+  <span id="hud-heading">方位: —</span> ·
   <span id="hud-data">表示: —</span>
   <span id="hud-err" class="err"></span>
+</div>
+
+<div id="minimap-wrap">
+  <div id="minimap"></div>
+  <div id="minimap-tap"></div>
+  <button id="minimap-close">閉じる</button>
 </div>
 
 <div id="overlay">
@@ -83,6 +123,17 @@
   function setGps(t){ document.getElementById("hud-gps").textContent = "GPS: " + t; }
   function setData(t){ document.getElementById("hud-data").textContent = "表示: " + t; }
   function setErr(t){ document.getElementById("hud-err").textContent = t ? ("  " + t) : ""; }
+
+  // ---- 方位（8分割）表示 ----
+  var DIRS_JA = ["北","北東","東","南東","南","南西","西","北西"];
+  function directionLabel(deg) {
+    var idx = Math.round(deg / 45) % 8;
+    return DIRS_JA[idx];
+  }
+  function setHeading(deg) {
+    document.getElementById("hud-heading").textContent =
+      "方位: " + Math.round(deg) + "\u00b0 (" + directionLabel(deg) + ")";
+  }
 
   var userPos = null;          // { lat, lon }
   var allFeatures = null;      // GeoJSONのfeatures全件（フィルタ前）
@@ -253,6 +304,59 @@
     if (DO && typeof DO.requestPermission === "function") DO.requestPermission().catch(function(){});
     if (DM && typeof DM.requestPermission === "function") DM.requestPermission().catch(function(){});
 
+    // ---- 方位センサー。iOSはwebkitCompassHeading（0=北、時計回り）を優先し、
+    //      なければAndroid向けにdeviceorientationabsoluteのalphaから概算する。
+    function handleOrientation(e) {
+      var heading;
+      if (typeof e.webkitCompassHeading === "number") {
+        heading = e.webkitCompassHeading;
+      } else if (e.absolute && e.alpha != null) {
+        heading = 360 - e.alpha;
+      } else {
+        return; // 相対値のみでは方位を確定できないため無視する
+      }
+      heading = ((heading % 360) + 360) % 360;
+      setHeading(heading);
+      if (beaconMarker) beaconMarker.setRotation(heading);
+    }
+    if ("ondeviceorientationabsolute" in window) {
+      window.addEventListener("deviceorientationabsolute", handleOrientation, true);
+    } else {
+      window.addEventListener("deviceorientation", handleOrientation, true);
+    }
+
+    // ---- MapLibreミニマップ。north-up固定（bearing:0）で、現在地と方位を反映する。----
+    var miniMap = new maplibregl.Map({
+      container: "minimap",
+      style: "https://tile.openstreetmap.jp/styles/osm-bright-ja/style.json",
+      center: [130.389615, 33.591517],
+      zoom: 16,
+      pitch: 0,
+      bearing: 0,
+      attributionControl: false
+    });
+    var beaconEl = document.createElement("div");
+    beaconEl.className = "beacon-marker";
+    beaconEl.innerHTML =
+      '<svg width="26" height="26" viewBox="0 0 26 26">' +
+      '<polygon points="13,0 18,10 13,7 8,10" fill="#2D7D46"></polygon>' +
+      '<circle cx="13" cy="13" r="5" fill="#2D7D46" stroke="#FFFFFF" stroke-width="2"></circle>' +
+      "</svg>";
+    var beaconMarker = new maplibregl.Marker({ element: beaconEl, rotationAlignment: "map" })
+      .setLngLat([130.389615, 33.591517])
+      .addTo(miniMap);
+    var miniMapCentered = false;
+
+    var minimapWrap = document.getElementById("minimap-wrap");
+    document.getElementById("minimap-tap").addEventListener("click", function () {
+      minimapWrap.classList.add("expanded");
+      setTimeout(function () { miniMap.resize(); }, 0);
+    });
+    document.getElementById("minimap-close").addEventListener("click", function () {
+      minimapWrap.classList.remove("expanded");
+      setTimeout(function () { miniMap.resize(); }, 0);
+    });
+
     startCamera()
       .then(function () {
         document.getElementById("overlay").style.display = "none";
@@ -276,6 +380,14 @@
               setGps(c.latitude.toFixed(6) + ", " + c.longitude.toFixed(6) + " (\u00b1" + Math.round(c.accuracy) + "m)");
               applyRadiusFilter(scene); // 最初の取得時に一度だけ絞り込みを行う
               updatePositions();
+
+              beaconMarker.setLngLat([c.longitude, c.latitude]);
+              if (!miniMapCentered) {
+                miniMap.setCenter([c.longitude, c.latitude]);
+                miniMapCentered = true;
+              } else {
+                miniMap.panTo([c.longitude, c.latitude], { duration: 0 });
+              }
             },
             function (err) { setErr("GPSエラー: " + err.code + " " + err.message); },
             { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
