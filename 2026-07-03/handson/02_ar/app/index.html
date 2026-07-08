@@ -290,20 +290,49 @@
     }
   });
 
-  function makeLabel(uuid) {
+  // ---- ラベル用のテクスチャをCanvas 2Dで作る。a-text（MSDFフォント）はラテン文字中心の
+  //      字形しか持たず日本語が表示できないため、通常のフォントレンダリング経路を使う。----
+  function makeLabelTexture(text) {
+    var fontSize = 56;
+    var fontSpec = fontSize + 'px "BIZ UDPGothic","Hiragino Sans","Yu Gothic",sans-serif';
+    var measureCanvas = document.createElement("canvas");
+    var mctx = measureCanvas.getContext("2d");
+    mctx.font = fontSpec;
+    var textWidth = mctx.measureText(text).width;
+
+    var paddingX = 36, paddingY = 24;
+    var canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(textWidth + paddingX * 2);
+    canvas.height = fontSize + paddingY * 2;
+
+    var ctx = canvas.getContext("2d");
+    ctx.font = fontSpec; // canvasのサイズ変更でコンテキスト状態がリセットされるため再設定する
+    ctx.fillStyle = "rgba(248,250,251,0.92)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = "#1A1A1A";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(1.5, 1.5, canvas.width - 3, canvas.height - 3);
+    ctx.fillStyle = "#111111";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+    return canvas;
+  }
+
+  function makeLabel(text) {
     var card = document.createElement("a-entity");
-    card.setAttribute("position", "0 0.4 0"); // 地面付近に留める（以前は1.2＝目線の高さだった）
+    card.setAttribute("position", "0 0.4 0"); // 地面付近に留める
     card.setAttribute("face-camera", "");
-    var plane = document.createElement("a-plane");
-    plane.setAttribute("material", "shader: flat; color: #F8FAFB; opacity: 0.9");
-    plane.setAttribute("width", "16"); plane.setAttribute("height", "1.6");
-    var t = document.createElement("a-text");
-    t.setAttribute("value", uuid);
-    t.setAttribute("align", "center");
-    t.setAttribute("color", "#111111");
-    t.setAttribute("width", "30"); // 長いuuidを収めるため文字を小さめにする
-    t.setAttribute("position", "0 0 0.05");
-    card.appendChild(plane); card.appendChild(t);
+
+    var canvas = makeLabelTexture(text);
+    var texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+
+    var planeHeight = 1.0; // ワールド単位
+    var planeWidth = planeHeight * (canvas.width / canvas.height);
+    var geom = new THREE.PlaneGeometry(planeWidth, planeHeight);
+    var mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
+    card.setObject3D("label", new THREE.Mesh(geom, mat));
     return card;
   }
 
