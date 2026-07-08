@@ -42,13 +42,14 @@
     position:fixed; top:0; left:0; right:0; z-index:15;
     font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.72rem; line-height:1.5;
     color:var(--ink); background:rgba(248,250,251,.85); padding:6px 10px; border-bottom:1px solid var(--line);
-    word-break:break-all; display:flex; align-items:center; justify-content:space-between; gap:8px;
+    word-break:break-all;
   }
   #hud .err { color:var(--warn); }
-  #hud-left { flex:1 1 auto; min-width:0; }
+
   #cam-toggle {
-    flex:0 0 auto; font:11px system-ui,sans-serif; padding:5px 8px;
-    background:#fff; color:var(--ink); border:1px solid var(--ink); border-radius:2px;
+    position:fixed; z-index:12; left:50%; bottom:12px; transform:translateX(-50%);
+    font:11px system-ui,sans-serif; padding:8px 12px;
+    background:rgba(248,250,251,.92); color:var(--ink); border:1.5px solid var(--ink); border-radius:2px;
     touch-action: manipulation; -webkit-tap-highlight-color: transparent;
   }
 
@@ -56,7 +57,7 @@
   body.no-camera #cam { display:none; }
 
   @media (max-width:380px) {
-    #cam-toggle { font-size:10px; padding:4px 6px; }
+    #cam-toggle { font-size:10px; padding:6px 9px; }
   }
 
   #minimap-wrap {
@@ -138,15 +139,14 @@
 <video id="cam" playsinline autoplay muted></video>
 
 <div id="hud">
-  <span id="hud-left">
-    <span id="hud-cam">カメラ: —</span> ·
-    <span id="hud-gps">GPS: —</span> ·
-    <span id="hud-heading">方位: —</span> ·
-    <span id="hud-data">表示: —</span>
-    <span id="hud-err" class="err"></span>
-  </span>
-  <button id="cam-toggle">映像を隠す</button>
+  <span id="hud-cam">カメラ: —</span> ·
+  <span id="hud-gps">GPS: —</span> ·
+  <span id="hud-heading">方位: —</span> ·
+  <span id="hud-data">表示: —</span>
+  <span id="hud-err" class="err"></span>
 </div>
+
+<button id="cam-toggle">映像を隠す</button>
 
 <div id="minimap-wrap">
   <div id="minimap"></div>
