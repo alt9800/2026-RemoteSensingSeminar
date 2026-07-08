@@ -55,6 +55,7 @@
     border-radius:4px;
     overflow:hidden;
     background:var(--panel);
+    touch-action: manipulation;
   }
   #minimap-wrap.expanded {
     right:0; bottom:0; left:0; top:0;
@@ -78,7 +79,8 @@
 
   #calib {
     position:fixed; z-index:12; left:12px; bottom:12px;
-    max-width:min(55vw, 220px);
+    max-width:min(60vw, 240px);
+    touch-action: manipulation;
   }
   #calib-toggle {
     font:12px "IBM Plex Mono",ui-monospace,monospace; padding:8px 10px;
@@ -87,20 +89,25 @@
     touch-action: manipulation;
   }
   #calib-controls {
-    display:none; margin-top:6px;
+    display:none; margin-top:6px; align-items:center;
     background:rgba(248,250,251,.95); border:1.5px solid var(--ink); border-radius:2px;
-    padding:8px; gap:6px; flex-wrap:wrap;
+    padding:8px; gap:6px; flex-wrap:wrap; touch-action: manipulation;
   }
   #calib.expanded #calib-controls { display:flex; }
   #calib-controls button {
-    font:12px system-ui,sans-serif; padding:6px 8px; background:#fff; color:var(--ink);
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    font:10px system-ui,sans-serif; padding:6px 7px; background:#fff; color:var(--ink);
     border:1px solid var(--ink); border-radius:2px; touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
+  #calib-controls button svg { width:18px; height:18px; display:block; }
   #calib-value { min-width:4em; text-align:center; font:12px "IBM Plex Mono",ui-monospace,monospace; }
 
   @media (max-width:380px) {
-    #calib { max-width:60vw; }
-    #calib-toggle, #calib-controls button { font-size:11px; padding:6px 7px; }
+    #calib { max-width:65vw; }
+    #calib-toggle { font-size:11px; padding:6px 7px; }
+    #calib-controls button { font-size:9px; padding:5px 6px; }
+    #calib-controls button svg { width:16px; height:16px; }
   }
 
   @media (max-width:380px) {
@@ -134,11 +141,35 @@
 <div id="calib">
   <button id="calib-toggle">方位補正 0°</button>
   <div id="calib-controls">
-    <button data-step="-10">-10°</button>
-    <button data-step="-1">-1°</button>
+    <button data-step="-10" title="時計回りに10度" aria-label="時計回りに10度回転">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 12a8 8 0 1 1-2.6-5.9"></path>
+        <polyline points="19 2 19 7 14 7"></polyline>
+      </svg>
+      <span>10°</span>
+    </button>
+    <button data-step="-1" title="時計回りに1度" aria-label="時計回りに1度回転">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 12a8 8 0 1 1-2.6-5.9"></path>
+        <polyline points="19 2 19 7 14 7"></polyline>
+      </svg>
+      <span>1°</span>
+    </button>
     <span id="calib-value">0°</span>
-    <button data-step="1">+1°</button>
-    <button data-step="10">+10°</button>
+    <button data-step="1" title="反時計回りに1度" aria-label="反時計回りに1度回転">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 12a8 8 0 1 0 2.6-5.9"></path>
+        <polyline points="5 2 5 7 10 7"></polyline>
+      </svg>
+      <span>1°</span>
+    </button>
+    <button data-step="10" title="反時計回りに10度" aria-label="反時計回りに10度回転">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 12a8 8 0 1 0 2.6-5.9"></path>
+        <polyline points="5 2 5 7 10 7"></polyline>
+      </svg>
+      <span>10°</span>
+    </button>
   </div>
 </div>
 
