@@ -426,12 +426,36 @@
     }
   }
 
+  // ---- geojson.ioなどで作った素のGeoJSON（point_lat/point_lng・polygon_uuidを
+  //      持たない）も扱えるよう、欠けている項目を読み込み時に自動補完する。----
+  function normalizeFeatures(features) {
+    features.forEach(function (f) {
+      var p = f.properties = f.properties || {};
+
+      if ((p.point_lat == null || p.point_lng == null) &&
+          f.geometry && f.geometry.type === "Polygon") {
+        var ring = f.geometry.coordinates[0];
+        var pts = ring.slice(0, ring.length - 1);
+        var lon = 0, lat = 0;
+        pts.forEach(function (c) { lon += c[0]; lat += c[1]; });
+        p.point_lng = lon / pts.length;
+        p.point_lat = lat / pts.length;
+      }
+
+      if (!p.polygon_uuid) {
+        // 表示ラベルはname優先のため、uuidは絞り込みロジック用の内部識別子として補う
+        p.polygon_uuid = "auto-" + Math.random().toString(36).slice(2, 10);
+      }
+    });
+    return features;
+  }
+
   function loadGeojsonFromFile(file) {
     var reader = new FileReader();
     reader.onload = function (e) {
       try {
         var gj = JSON.parse(e.target.result);
-        allFeatures = gj.features || [];
+        allFeatures = normalizeFeatures(gj.features || []);
         setData("GeoJSON読込済み（" + allFeatures.length + "件）。GPS取得待ち");
       } catch (err) {
         setErr("GeoJSON解析エラー: " + err);
@@ -444,7 +468,7 @@
     fetch(url)
       .then(function (r) { return r.json(); })
       .then(function (gj) {
-        allFeatures = gj.features || [];
+        allFeatures = normalizeFeatures(gj.features || []);
         setData("GeoJSON読込済み（" + allFeatures.length + "件）。GPS取得待ち");
       })
       .catch(function (e) { setErr("GeoJSON読込エラー: " + e); });
