@@ -22,7 +22,7 @@
   body { font-family:"BIZ UDPGothic","Hiragino Sans",system-ui,sans-serif; color:var(--ink); }
 
   #cam { position:fixed; inset:0; width:100%; height:100%; object-fit:cover; background:#000; z-index:0; }
-  a-scene { position:fixed; inset:0; width:100%; height:100%; z-index:1; }
+  a-scene { position:fixed; inset:0; width:100%; height:100%; z-index:2; }
 
   #overlay {
     position:fixed; inset:0; z-index:20; background:var(--bg);
@@ -47,17 +47,22 @@
   #hud .err { color:var(--warn); }
 
   #cam-toggle {
-    position:fixed; z-index:12; left:50%; bottom:12px; transform:translateX(-50%);
-    font:11px system-ui,sans-serif; padding:8px 12px;
+    position:fixed; z-index:16; top:8px; right:8px;
+    font:11px system-ui,sans-serif; padding:7px 10px;
     background:rgba(248,250,251,.92); color:var(--ink); border:1.5px solid var(--ink); border-radius:2px;
     touch-action: manipulation; -webkit-tap-highlight-color: transparent;
   }
 
-  body.no-camera { background:#000; }
-  body.no-camera #cam { display:none; }
+  /* カメラ映像を消す・隠すのではなく、映像とARシーンの間に半透明の黒を挟んで
+     映像だけを暗くする。ARの輪郭線・ラベルはこのレイヤーより上にあるため影響を受けない。 */
+  #dim-overlay {
+    position:fixed; inset:0; z-index:1; pointer-events:none;
+    background:rgba(0,0,0,0);
+  }
+  body.dimmed #dim-overlay { background:rgba(0,0,0,0.88); }
 
   @media (max-width:380px) {
-    #cam-toggle { font-size:10px; padding:6px 9px; }
+    #cam-toggle { font-size:10px; padding:6px 8px; }
   }
 
   #minimap-wrap {
@@ -137,6 +142,7 @@
 <body>
 
 <video id="cam" playsinline autoplay muted></video>
+<div id="dim-overlay"></div>
 
 <div id="hud">
   <span id="hud-cam">カメラ: —</span> ·
@@ -146,7 +152,7 @@
   <span id="hud-err" class="err"></span>
 </div>
 
-<button id="cam-toggle">映像を隠す</button>
+<button id="cam-toggle">映像を暗くする</button>
 
 <div id="minimap-wrap">
   <div id="minimap"></div>
@@ -212,10 +218,11 @@
   function setData(t){ document.getElementById("hud-data").textContent = "表示: " + t; }
   function setErr(t){ document.getElementById("hud-err").textContent = t ? ("  " + t) : ""; }
 
-  // ---- カメラ映像の表示/非表示。黒背景に地物だけを浮かせて確認したい場合に使う。----
+  // ---- カメラ映像を暗くする。映像とARシーンの間に黒レイヤーを挟むだけなので、
+  //      ARの描画設定（alpha合成など）の状態に関わらず確実に効果が出る。----
   document.getElementById("cam-toggle").addEventListener("click", function () {
-    var hidden = document.body.classList.toggle("no-camera");
-    this.textContent = hidden ? "映像を表示" : "映像を隠す";
+    var dimmed = document.body.classList.toggle("dimmed");
+    this.textContent = dimmed ? "映像を戻す" : "映像を暗くする";
   });
 
   // ---- 方位（8分割）表示 ----
