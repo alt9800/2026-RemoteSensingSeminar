@@ -47,7 +47,7 @@
   #hud .err { color:var(--warn); }
 
   #cam-toggle {
-    position:fixed; z-index:16; top:8px; right:8px;
+    position:fixed; z-index:16; top:40px; right:8px; /* topはJSでHUDの実高さに追従させる。この値はJS実行前の暫定値 */
     font:11px system-ui,sans-serif; padding:7px 10px;
     background:rgba(248,250,251,.92); color:var(--ink); border:1.5px solid var(--ink); border-radius:2px;
     touch-action: manipulation; -webkit-tap-highlight-color: transparent;
@@ -224,6 +224,22 @@
     var dimmed = document.body.classList.toggle("dimmed");
     this.textContent = dimmed ? "映像を戻す" : "映像を暗くする";
   });
+
+  // ---- HUDはGPS座標や方位の文字数で高さが変わる（狭い画面では2行になる）。
+  //      固定pxで下にボタンを置くとHUDと重なるため、実際の高さを測って追従させる。----
+  (function () {
+    var hud = document.getElementById("hud");
+    var btn = document.getElementById("cam-toggle");
+    function sync() {
+      btn.style.top = (hud.getBoundingClientRect().height + 8) + "px";
+    }
+    if (window.ResizeObserver) {
+      new ResizeObserver(sync).observe(hud);
+    } else {
+      window.addEventListener("resize", sync); // ResizeObserver非対応環境向けの簡易フォールバック
+    }
+    sync();
+  })();
 
   // ---- 方位（8分割）表示 ----
   var DIRS_JA = ["北","北東","東","南東","南","南西","西","北西"];
