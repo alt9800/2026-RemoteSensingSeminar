@@ -1,16 +1,32 @@
-リンク
+# デモ①：ラズパイタイルサーバー
 
-./2026-06-26/handson/04_raspi
+Raspberry Pi 3B+ を使ったオフラインタイル配信デモのディレクトリです。
 
-├── README.md
+ラスタータイル（PNG / XYZ）とベクタータイル（PMTiles）を同一 Pi から Nginx で配信し、ブラウザ上の MapLibre GL JS で表示します。地図データはすべて Pi の中にあり、インターネット接続は不要です。
 
-├── [faculty](./faculty/)
+---
 
-│   └── readme.md
+## ディレクトリ構成
 
-├── [participants](./participants/)
-│   └── readme.md
+**[faculty](./faculty/)** — 講師向けセットアップ手順。データパイプライン・Pi 設定・当日の接続方法をまとめています。
 
-├── [raster.html](./raster.html)
+**[participants](./participants/)** — 受講者向け接続手順とデモの解説。
 
-└── [vector.html](raster.html)
+**[raster.html](./raster.html)** — OSM 由来のラスタータイルを表示するビューア。
+
+**[vector.html](raster.html)** — 農林水産省筆ポリゴン（PMTiles）を表示するビューア。
+
+---
+
+## 配信しているデータ
+
+ラスタータイルは OSM（中国地方 PBF）から宇部市域を切り出し、道路・森林・河川・水域をトポ風にスタイリングして生成した PNG タイルです。ズームレベルは z10 / z13 / z16 の三段階、合計 2,058 枚・約 10MB。
+
+ベクタータイルは農林水産省のオープンデータ（筆ポリゴン）を tippecanoe で PMTiles 化したものです。宇部市の農地 27,491 フィーチャーを収録し、田（緑）と畑（アンバー）を `land_type` 属性で色分けしています。
+
+---
+
+## 関連
+
+- データ生成スクリプト: `generate_tiles.py`
+- Martin の位置づけ: 第1回スライド参照。Pi + Martin の実機ハンズオンは FOSS4G Hiroshima 2026 で別途実施予定。

@@ -42,7 +42,7 @@ pip install Pillow shapely pyproj
 pip list | grep -E "Pillow|shapely|pyproj"
 ```
 
-次回以降は `source .venv/bin/activate` だけ実行すれば OK。
+次回以降は `source .venv/bin/activate` だけ実行すれば OK。`deactivate` で venv を抜けられる。
 
 ### 2. OSM データの取得とクリップ
 
@@ -60,6 +60,8 @@ ls -lh ube.osm.pbf
 
 ### 3. export.json の作成
 
+`osmium export` はこの設定ファイルで OSM タグを線（LineString）として扱うか面（Polygon）として扱うかを判断する。ファイルがないか空だとエラーになる。
+
 ```bash
 cat > export.json << 'EXPORTEOF'
 {
@@ -74,6 +76,8 @@ cat > export.json << 'EXPORTEOF'
 EXPORTEOF
 ```
 
+`attributes` はメタデータを GeoJSON に含めるかどうかのフラグ。すべて `false` にすることで geometry と properties だけの軽量な出力になる。
+
 ### 4. GeoJSON エクスポート
 
 ```bash
@@ -86,6 +90,8 @@ osmium export \
 ls -lh ube.geojson
 ```
 
+`--geometry-types=linestring,polygon` でポイントを除外している。
+
 ### 5. タイル生成
 
 ```bash
@@ -97,23 +103,7 @@ find tiles -name "*.png" | wc -l
 du -sh tiles/
 ```
 
-| zoom | 表示内容 | 枚数目安 | 所要時間 |
-|---|---|---|---|
-| z10 | 水域・森林・主要道路 | ~4 枚 | 数秒 |
-| z13 | z10 + 河川・生活道路・鉄道・公園 | ~45 枚 | 数分 |
-| z16 | z13 + 建物 | ~1,500 枚 | 20〜40 分 |
-
-カラーパレット（トポ風）：
-
-| レイヤー | 色 |
-|---|---|
-| 陸地 | `#f2ede4` |
-| 森林・公園 | `#b8d4a8` |
-| 水域・湖 | `#89bdd3` |
-| 河川 | `#6aaec6` |
-| 主要道路 | `#e8c87a` |
-| 生活道路 | `#cfc9bf` |
-| 建物 | `#dcd2c6` |
+z10 は水域・森林・主要道路のみ、約4枚・数秒。z13 は河川・生活道路・鉄道・公園が追加、約45枚・数分。z16 は建物が追加、約1,500枚・20〜40分。
 
 ---
 
@@ -126,14 +116,16 @@ sudo apt update && sudo apt install -y nginx
 sudo systemctl status nginx
 ```
 
-`/etc/nginx/sites-available/default` を以下で置き換える：
+`/etc/nginx/sites-available/default` を以下で置き換える。既存の設定ブロックは削除し、このブロックだけにすること（2ブロック共存すると想定外の方が優先される）。
 
 ```nginx
 server {
-    listen 80;
-    server_name _;
+    listen 80 default_server;
+    listen [::]:80 default_server;
+
     root /var/www/html;
     index index.html;
+    server_name _;
 
     add_header Access-Control-Allow-Origin *;
     add_header Access-Control-Allow-Methods 'GET, OPTIONS';
@@ -150,50 +142,68 @@ server {
 }
 ```
 
+設定後、`sites-enabled/` にシムリンクがあるか確認する。ないと 404 になる。
+
 ```bash
+ls -la /etc/nginx/sites-enabled/
+# default へのシムリンクがなければ作る
+sudo ln -s /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-### 2. Tailscale セットアップ
+### 2. 自動起動の有効化
+
+再起動後も Tailscale と Nginx が上がるよう、事前に設定しておく。
+
+```bash
+sudo systemctl enable tailscaled
+sudo systemctl enable nginx
+```
+
+### 3. Tailscale セットアップ
 
 ```bash
 curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up
 # → ブラウザで認証 URL が表示されるので Mac で開いて認証
 
-tailscale ip -4   # → 100.x.x.x
+tailscale ip -4   # → 100.x.x.x（今回は 100.66.201.10）
 ```
 
-Mac から疎通確認：
+Tailscale は講師が Pi に SSH する手段として使う。参加者は Tailscale 不要。
+
+### 4. ファイル転送（Mac → Pi）
+
+転送前にパーミッションを確認する。
 
 ```bash
-curl http://<TAILSCALE_IP>/
+# Pi 上で
+sudo chown -R pi3-2026:pi3-2026 /var/www/html/
 ```
 
-### 3. ファイル転送（Mac → Pi）
+Mac からイントラの IP（ローカル IP）を使って rsync で転送する。Tailscale IP ではなくローカル IP を使うこと。
 
 ```bash
-# Pi の IP 確認（Pi 上で）
-hostname -I
-
-# Mac から rsync
 rsync -avz --progress \
   ~/Desktop/experiments/2026-06-20/ube-map/tiles/ \
-  pi@<PI_IP>:/var/www/html/tiles/
+  pi3-2026@<LOCAL_IP>:/var/www/html/tiles/
 
 rsync -avz --progress \
   ~/Desktop/experiments/2026-06-20/ube-map/fude.pmtiles \
-  pi@<PI_IP>:/var/www/html/fude.pmtiles
+  pi3-2026@<LOCAL_IP>:/var/www/html/fude.pmtiles
 
 rsync -avz --progress \
   raster.html vector.html \
-  pi@<PI_IP>:/var/www/html/
+  pi3-2026@<LOCAL_IP>:/var/www/html/
 ```
 
 ---
 
-## 当日の接続：三段フォールバック
+## 当日の接続：フォールバック構成
+
+会場ネットワークの制約はフタを開けるまでわからないため、順番に試せる準備をしておく。
 
 ### ① 会場 WiFi + ローカル IP（優先）
 
@@ -202,18 +212,46 @@ http://<PI_LOCAL_IP>/raster.html
 http://<PI_LOCAL_IP>/vector.html
 ```
 
-条件：会場 WiFi が AP isolation なし（デバイス間通信を許可）。
+条件：会場 WiFi が AP isolation なし（デバイス間通信を許可）。LAN スキャンで Pi の IP を確認してからアナウンスする。mDNS が通る環境では `http://raspi3bp-2026/raster.html` でも届く場合がある。
 
-### ② Tailscale 経由
+### ② Cloudflare Tunnel（① が使えない場合の推奨）
+
+Pi 側だけセットアップすれば参加者は普通のブラウザでアクセスできる。Tailscale のように参加者側の設定は一切不要。
+
+```bash
+# Pi 上で実行（アカウント不要、クイックトンネル）
+curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64 \
+  -o cloudflared && chmod +x cloudflared
+./cloudflared tunnel --url http://localhost:80
+# → https://xxxxxxxx.trycloudflare.com が発行される
+```
+
+発行された URL を QR コードにしてスクリーンに表示すれば参加者はそこにアクセスするだけ。
+
+条件：Pi がインターネットに出られること（会場 WiFi 経由で OK）。
+
+### ③ Tailscale 経由
 
 ```
 http://100.66.201.10/raster.html
 http://100.66.201.10/vector.html
 ```
 
-条件：Pi がインターネットに出られること。
+参加者全員が Tailscale アカウントを持っている必要があるため、工数が大きく一般的なセミナーには不向き。講師の手元からの動作確認用として使う。
 
-### ③ Pi をアクセスポイント化（完全オフライン）
+### ④ GL-SFT1200 を持ち込んで独自サブネットを作る（根本解決）
+
+```
+会場 WiFi（WAN 側）
+    ↓ リピーターモード
+GL-SFT1200（192.168.8.1）
+    ├── LAN 有線 → Pi 3B+（安定）
+    └── WiFi    → 参加者デバイス
+```
+
+Pi を有線 LAN で繋ぐことで WiFi の不安定さも解消される。参加者は GL-SFT1200 の WiFi に接続するだけで Pi への HTTP アクセスが通る。AP isolation の問題を根本から断てる。
+
+### ⑤ Pi をアクセスポイント化（インターネット完全不要）
 
 ```bash
 sudo apt install -y hostapd dnsmasq
@@ -250,9 +288,10 @@ WiFi SSID : ube-map
 地図 URL  : http://192.168.4.1/raster.html
             http://192.168.4.1/vector.html
 ```
+過程のSSIDとパスワードです
 
-> ③ に切り替えると Pi 自身がインターネットに出られなくなり Tailscale SSH も不可になる。
-> 切り替え前に設定を完全に済ませておくこと。緊急時は有線 LAN（eth0）経由の SSH を確保。
+
+この構成に切り替えると Pi 自身がインターネットに出られなくなり Tailscale SSH も不可になる。切り替え前に設定を完全に済ませ、緊急時の操作手段として有線 LAN（eth0）経由の SSH を確保しておくこと。
 
 ---
 
