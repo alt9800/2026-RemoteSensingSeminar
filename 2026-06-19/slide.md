@@ -150,7 +150,6 @@ style: |
 ## タイル配信①
 ### データ構造とパース
 
-2026年6月19日（金）
 
 ---
 
@@ -178,7 +177,7 @@ style: |
 
 - タイルピラミッドの仕組みを説明できる
 - MVT（protobuf）と PMTiles の関係を整理できる
-- `tippecanoe` で PMTiles を生成し、MapLibre で表示できる
+- `tippecanoe` で PMTiles を生成し、MapLibre で表示できた
 
 <br>
 
@@ -422,15 +421,6 @@ map.addSource('fude', {
 
 ---
 
-## 参考：今ここ何番地？（白土さん / 土地家屋調査士）
-
-法務省地図（公共座標）をMapLibre GL JSで表示するWebGIS。
-47自治体・2000万筆規模の地番ポリゴンをブラウザで動かしており、
-大量ポリゴンのベクタータイル化という課題を実務として取り組んでいる事例。
-https://office-shirado.com/imakoko/
-
----
-
 <div class="label">ハンズオン — 事前準備</div>
 
 # ツールのインストール
@@ -635,11 +625,13 @@ npx serve .
 
 ## タイル配信② 自前配信とカートグラフィック
 
-- Nginx による静的配信設定（CORS 設定含む）
-- Maputnik でのスタイル設計
-- MapLibre GL JS によるレンダリング実装
-- デモ①：ラズパイタイルサーバーへの接続体験
-- デモ②：地理院地図ベクターの試行錯誤
-- OSM エコシステムと外部サービスの整理・判断基準
+**キーワード：** Nginx・PMTiles 静的配信・CORS・Maputnik・MapLibre Style Spec・OpenStreetMap
 
-<div class="note">第2回は現地開催です。今日生成した PMTiles ファイルを持参または共有してください。</div>
+- Nginx で PMTiles を配信する（タイルサーバー不要）
+- Maputnik でスタイルを GUI 編集 → `style.json` エクスポート
+- 同一オリジンポリシーと CORS の関係を整理する
+- デモ①：ラズパイ上のオフライン地図サーバーに接続する
+- OSM へのデータ還元と現地調査ツールとしての活用
+- デモ②：地理院地図ベクタータイルのスタイルカスタマイズ
+
+<div class="note">第2回は現地開催です。前回生成した PMTiles ファイルを持参または共有してください。</div>

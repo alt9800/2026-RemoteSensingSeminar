@@ -346,17 +346,7 @@ MapLibre Style Spec を GUI で編集できるオープンソースのスタイ�
 https://app.maputnik.com/
 ```
 
-**Docker を使う場合（参考）**
-
-Docker はアプリをコンテナとして隔離実行するツール。
-Maputnik のローカル版は Docker イメージとして配布されているため、以下で起動できる：
-
-```bash
-docker run -p 8888:8888 maputnik/editor
-# → http://localhost:8888
-```
-
-インストール不要でどの OS でも同じ環境が立ち上がる点が利点。本日は Web 版を使用する。
+<div class="note">ローカル版は Docker で起動できる（<code>docker run -p 8888:8888 maputnik/editor</code>）が、本日は Web 版を使用する。</div>
 
 ---
 
@@ -799,11 +789,11 @@ iD エディタで現地編集 → OSM に還元 → GeoFabrik でエクスポ�
 
 # 第3回（7/3）予告
 
-## 高さデータ① リモートセンシングと高さデータのフォーマット・変換処理
+## 3D技術① スマホセンサーとAR
 
-- InSAR・LiDAR・SfM による DEM 生成の背景
-- GeoTIFF / COG / LAS / LAZ フォーマットの整理
-- GDAL を中心とした変換パイプライン
-- Terrain RGB 形式への変換・タイル書き出し
+**キーワード：** GeolocationAPI・DeviceOrientationEvent・A-Frame・AR.js・WebXR
 
-<div class="note">使用データ（GeoTIFF）は事前に配布します。</div>
+- スマートフォンの GPS・ジャイロ・カメラを Web API から利用する
+- GeolocationAPI と DeviceOrientationEvent の特性と制約を整理する
+- 地理座標に紐づいた AR アプリを実装する
+- リモートセンシング由来の観測値をカメラ映像に重ねて表示する
