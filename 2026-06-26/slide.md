@@ -250,16 +250,28 @@ React（`localhost:3000`）と Rails API（`localhost:8000`）を開発中に連
 
 サーバーが `Access-Control-Allow-Origin` ヘッダーを返すことで「このリソースは他オリジンから取得してよい」と宣言する。
 
+**Maputnik が PMTiles を参照する仕組み**
+
+Maputnik はスタイルエディタなので、直接読み込めるのは `style.json` のみ。  
+PMTiles（タイルデータ）は「どこにあるか（URL）」を Data Sources に指定して参照する。
+
+```
+Maputnik で読み込めるもの  → style.json（Upload で直接読み込み可）
+Maputnik で読み込めないもの → fude.pmtiles（URL 参照が必要）
+```
+
 **今回 CORS が必要になる場面**
 
 ```
-app.maputnik.com（外部）
-  → localhost:8000/fude.pmtiles を取得しようとする
-  → 別オリジンなのでブロック → Nginx に設定が必要
+app.maputnik.com（外部サービス）
+  → Data Sources に http://localhost:8000/fude.pmtiles を指定
+  → app.maputnik.com と localhost:8000 は別オリジン
+  → ブラウザがブロック → Nginx に CORS 設定が必要
+```
 
-MapLibre（ブラウザ内）
-  → 別ドメインのタイルサーバーにリクエスト
-  → 同様にブロック → サーバー側の CORS 設定が必要
+```
+※ curl でのテストは CORS の制約を受けない
+  → curl が通っても、ブラウザから Maputnik 経由で繋がるかは別の話
 ```
 
 | ヘッダー | 設定値 | 意味 |

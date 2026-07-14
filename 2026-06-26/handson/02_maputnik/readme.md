@@ -1,5 +1,24 @@
 # Maputnik でスタイルを編集する
 
+MapLibre Style Spec を GUI で編集できるオープンソースのスタイルエディタ。
+編集結果を JSON でエクスポートし、そのまま MapLibre に渡せる。
+
+---
+
+## Maputnik と PMTiles の関係
+
+Maputnik はスタイルエディタなので、直接読み込めるのは `style.json` のみ。
+
+| 操作 | 読み込めるか |
+|---|---|
+| style.json を Upload | ✓ 直接読み込める |
+| fude.pmtiles を Upload | ✗ 読み込めない |
+| fude.pmtiles を URL で参照 | ✓ ローカルサーバー経由で参照できる |
+
+PMTiles はデータソースなので、Data Sources に URL を指定して参照する。
+このとき `app.maputnik.com`（外部）が `localhost:8000`（ローカル）へリクエストするため、
+**別オリジン間の通信が発生し CORS 設定が必要**になる。
+
 ---
 
 ## 準備
@@ -13,21 +32,24 @@ python3 -m http.server 8000
 
 ---
 
-## 手順
+## Step 1：スタイルを読み込む
 
-### 1. ベーススタイルを読み込む
-
-「Open」→「From URL」→ 以下を入力：
+「Open」→「From URL」→ 以下を入力して読み込む：
 
 ```
 https://gsi-cyberjapan.github.io/gsivectortile-mapbox-gl-js/std.json
 ```
 
-または「Empty Style」から白紙で始めて自前の PMTiles だけ使う。
+地理院地図ベクタータイルのスタイルが Maputnik 上に展開される。
+左パネルにレイヤー一覧、中央にプレビューが表示される。
 
-### 2. データソースを追加する
+白紙から始める場合は「New Style」→「Empty Style」を選ぶ。
 
-「Data Sources」→「Add New Source」
+---
+
+## Step 2：自前のデータソースを追加する
+
+右上の「Data Sources」→「Add New Source」
 
 ```
 Source ID  : fude
@@ -35,61 +57,52 @@ Source Type: Vector（TileJSON / PMTiles）
 URL        : http://localhost:8000/fude.pmtiles
 ```
 
-### 3. レイヤーを追加する
+---
 
-「Add Layer」→ 以下を設定：
+## Step 3：レイヤーを追加する
+
+左パネル下部「＋ Add Layer」
 
 ```
-ID          : fude-fill
-Type        : Fill
+Layer ID    : fude-fill
+Layer Type  : Fill
 Source      : fude
-Source Layer: fude
+Source Layer: fude       ← tippecanoe の -l に対応
 ```
 
-Paint プロパティで色を設定：
+---
+
+## Step 4：色と透明度を設定する
+
+レイヤーを選択 →「Paint」タブ
 
 ```
-fill-color  : #6ab04c
-fill-opacity: 0.5
+fill-color   : #6ab04c
+fill-opacity : 0.5
 ```
 
-### 4. ズームに応じて透明度を変化させる
-
-`fill-opacity` の右の「＋」→「Zoom」を選択：
+ズームに応じて透明度を変化させる場合：
+`fill-opacity` の右の「＋」→「Zoom」を選択
 
 ```
 zoom 10 → 0.2
 zoom 17 → 0.7
 ```
 
-### 5. スタイルをエクスポートして MapLibre に渡す
+---
+
+## Step 5：エクスポートして MapLibre に渡す
 
 「Export」→ `style.json` をダウンロード。
 
 ```js
-const map = new maplibregl.Map({
-  container: 'map',
-  style: './style.json'   // エクスポートしたファイルをそのまま渡す
-});
-```
-
----
-
-## 補足：スタイルの渡し方
-
-MapLibre へのスタイルの渡し方は2パターンある。
-Maputnik のエクスポートはパターン①の形になる。
-
-### パターン①：スタイル JSON の URL（またはオブジェクト）を渡す
-
-```js
-// URL を渡す（Maputnik エクスポートの利用）
+// 初期化時にそのまま渡す
 const map = new maplibregl.Map({
   container: 'map',
   style: './style.json'
 });
 
-// 後から切り替える
+// 後から切り替える場合
 fetch('./style.json')
   .then(r => r.json())
   .then(style => {
@@ -97,10 +110,20 @@ fetch('./style.json')
   });
 ```
 
-ソースもレイヤーも JSON 側に書かれているため、コード側はシンプルになる。
-カスタマイズは JSON を直接編集するか、Maputnik で再編集する。
+---
 
-### パターン②：インラインでオブジェクトを書く（PMTiles を直接扱う場合）
+## 補足：スタイルの渡し方2パターン
+
+Maputnik のエクスポートは**パターン①**の形になる。
+
+| | パターン① URL / JSON ファイル | パターン② インラインオブジェクト |
+|---|---|---|
+| 向いている場面 | Maputnik で作ったスタイルを使う | コードで全部管理したい |
+| レイヤー定義 | JSON 側 | コード側 |
+| `pmtiles://` | URL に書けば可 | `addProtocol()` の事前登録が必要 |
+| タイルの中身 | MVT（PBF） | MVT（PBF）← 同じ |
+
+パターン②（インライン）の例：
 
 ```js
 const protocol = new pmtiles.Protocol();
@@ -124,21 +147,18 @@ const map = new maplibregl.Map({
 });
 ```
 
-`pmtiles://` は独自プロトコルなので `addProtocol()` の事前登録が必要。
-ソースもレイヤーも自分で書くため、細かいカスタマイズがしやすい。
-
-### どちらを選ぶか
-
-| | パターン① | パターン② |
-|---|---|---|
-| 向いている場面 | Maputnik で作ったスタイルを使う | コードで全部管理したい |
-| レイヤー定義 | JSON 側 | コード側 |
-| PMTiles 直参照 | URL で書けば可 | `addProtocol()` が必要 |
-| タイルの中身 | MVT（PBF） | MVT（PBF）← 同じ |
-
 ---
 
-## 参考
+## 補足：setStyle() のタイミング
 
-`setStyle()` 後にソースやレイヤーを追加する場合は `styledata` より `idle` イベントを使う
-（地理院地図ベクタータイルの試行錯誤で確認済み → `../../../2026-06-19/handson/04_gsi_vector/NOTES.md` 参照）。
+スタイル切り替え後にソースやレイヤーを追加する場合は `styledata` より `idle` を使う。
+
+```js
+map.setStyle(newStyle);
+map.once('idle', () => {
+  // ここでソース・レイヤーを追加する
+});
+```
+
+地理院地図ベクタータイルのカスタマイズで確認済み。
+詳細 → `2026-06-19/handson/04_gsi_vector/NOTES.md`
