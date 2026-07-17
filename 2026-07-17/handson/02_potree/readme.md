@@ -4,15 +4,19 @@
 
 ## Potreeエコシステムの整理
 
-- **Potree**：Webビューア本体のJavaScriptライブラリ。Three.jsベースで、Octree LODにより大量の点群を高速表示できる
+Potree（読みは「ポトリー」。point cloud + octree に由来する造語）は、Three.jsベースのオープンソース点群Webビューアです。Octree LODにより大量の点群を高速表示できます。
+
+- **Potree**：Webビューア本体のJavaScriptライブラリ
 - **PotreeConverter**：CLIの変換ツール。LAS/LAZをPotreeが読めるoctree形式に変換する
 - **PotreeDesktop**：Electronベースのデスクトップアプリ。GUIで点群を閲覧できる
 
 ## PotreeConverterの入手
 
-GitHubのReleasesからダウンロードするか、npmでインストールします。バイナリは**WindowsとLinux向け**に提供されています。macOSはDockerでLinuxバイナリを使います（後述）。
+GitHubのReleasesからダウンロードします。バイナリは**WindowsとLinux（x86_64）向け**に提供されています。
 
 https://github.com/potree/PotreeConverter
+
+macOSの方はDockerでLinuxバイナリを使います。手順と既知の問題は [faculty/readme.md](./faculty/) にまとめてあります。当日はこちらでサポートしますので、Docker Desktopの導入だけ済ませておいてください。
 
 ## 変換（Windows / Linux）
 
@@ -20,7 +24,7 @@ https://github.com/potree/PotreeConverter
 PotreeConverter input.las -o ./output --generate-page index
 ```
 
-`--generate-page index` を指定すると、ビューア付きの index.html が生成されます。
+`--generate-page index` を指定すると、ビューア付きの index.html も生成されます。
 
 出力ディレクトリの構成：
 
@@ -33,73 +37,29 @@ output/
     （+ libs/ 等のPotreeビューア用リソース）
 ```
 
+変換時間の目安：Scaniverseのスキャンデータ（80万点・20MB程度）で数秒です。出力される `octree.bin` は入力LASと同程度かやや小さくなります。
+
 PotreeConverterには圧縮オプションがないため、実運用ではWebサーバー側でBrotli/gzip圧縮を行って配信するとよいでしょう（GitHub Pagesは自動で圧縮配信されます）。
 
-## macOSでの利用（Docker）
+## 注意：CloudCompareで編集したLASが「0点」扱いになる場合
 
-以下のDockerfileでLinux環境ごと用意します。
+CloudCompareでGlobal Shiftが適用された状態でエクスポートすると、LASのバウンディングボックスがすべて0になり、PotreeConverterが `#points: 0` として扱うことがあります。
 
-```dockerfile
-FROM ubuntu:22.04
-
-RUN apt-get update && apt-get install -y \
-    git cmake build-essential libtbb-dev curl && \
-    rm -rf /var/lib/apt/lists/*
-
-# PotreeConverter のビルド
-RUN git clone --branch 2.1.1 --depth 1 https://github.com/potree/PotreeConverter.git /tmp/PotreeConverter && \
-    cd /tmp/PotreeConverter && \
-    mkdir build && cd build && \
-    cmake .. -DCMAKE_BUILD_TYPE=Release && \
-    make -j$(nproc) && \
-    mkdir -p /opt/PotreeConverter && \
-    cp PotreeConverter /opt/PotreeConverter/ && \
-    cp -r /tmp/PotreeConverter/resources /opt/PotreeConverter/ && \
-    find /tmp/PotreeConverter/build -name "*.so*" -exec cp {} /usr/local/lib/ \; && \
-    ldconfig && \
-    rm -rf /tmp/PotreeConverter
-
-# Potree 1.8 ビューアの libs をテンプレートに追加
-RUN curl -L https://github.com/potree/potree/archive/refs/tags/1.8.tar.gz -o /tmp/potree.tar.gz && \
-    tar -xzf /tmp/potree.tar.gz -C /tmp/ && \
-    cp -r /tmp/potree-1.8/libs/* /opt/PotreeConverter/resources/page_template/libs/ && \
-    rm -rf /tmp/potree.tar.gz /tmp/potree-1.8
-
-WORKDIR /data
-ENTRYPOINT ["/opt/PotreeConverter/PotreeConverter"]
-```
-
-ビルド：
-
-```sh
-docker build -t potreeconverter .
-
-# Appleシリコンの場合はamd64向けにビルドすることを明示する
-docker build --platform linux/amd64 -t potreeconverter .
-```
-
-変換の実行：
-
-```sh
-docker run --rm -v $(pwd):/work potreeconverter \
-  /work/data/{データ名}.las -o /work/potree_output --generate-page index
-```
-
-### 既知の問題：libsのコピー失敗
-
-環境によっては、変換時に `resources/page_template/` の中身（HTMLテンプレートとlibsディレクトリ一式）を出力先にコピーする段階で、ファイル権限の問題により失敗することがあります。
-
-変換自体は正常に完了しているはずなので、出力の `libs` に関連ファイルが含まれていない場合は、`docker cp` などでテンプレートからライブラリを取り出してください。
+- 変換結果が空になった場合は、まずこれを疑ってください
+- CloudCompareのエクスポート時の座標オフセット設定を確認します（01の手順で「シフトを保持したまま」保存していれば通常は問題ありません）
+- 切り分けとして、Scaniverseからエクスポートした元のLASファイルは問題なく変換できます
 
 ## ローカルでの確認
 
-`file://` での直接オープンは不可です（fetchが失敗します。第1回のPMTilesと同じ理由）。以下のいずれかで確認します。
+`file://` での直接オープンは不可です（fetchが失敗します。第1回のPMTilesと同じ理由）。
 
-- `python3 -m http.server 8000`
-- npm の `http-server`
-- VSCode拡張「Live Server」
+```sh
+python3 -m http.server 8080 -d output
+# または
+npx serve output
+```
 
-ブラウザで `http://localhost:8000/output/index.html` を開くと、Potreeビューアで点群が表示されます。左パネルのPoint budget（同時表示する最大点数）やEye-Dome-Lighting等を触ってみてください。
+ブラウザで `http://localhost:8080/index.html` を開くと、Potreeビューアで点群が表示されます。左パネルのPoint budget（同時表示する最大点数）やEye-Dome-Lighting等を触ってみてください。
 
 ## 公開
 
