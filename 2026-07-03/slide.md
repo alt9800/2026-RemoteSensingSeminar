@@ -140,6 +140,8 @@ style: |
   section.dark .note { color: var(--teal); font-style: italic; }
 ---
 
+<!-- _class: title -->
+
 # 衛星データ解析技術研究会 技術セミナー（応用編）
 
 ## 第3回：3D技術① 
