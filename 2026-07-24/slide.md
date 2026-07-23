@@ -173,11 +173,11 @@ style: |
 - CloudCompare → PotreeConverter → deck.gl のパイプライン
 - 3DGSの現状（Scaniverse / Luma AI、CesiumJS統合の動向）
 
-**第4回で扱った点群は「離散的な3D計測値」だった**
+**第4回で扱った点群は「点の集まりのまま」扱う世界だった**
 
-第5回・第6回はその連続版とも言える **高さデータ（DEM/DSM）** を扱う
+第5回・第6回は、それをグリッドに整理した **高さデータ（DEM/DSM）** を扱う
 
-- 点群 → ラスター化（グリッド化）したものがDSM/DTMの実体のひとつ
+- 点群をラスター化（グリッド化）したものがDSM/DTMの代表的な作り方のひとつ
 - 第4回のLiDAR点群処理と地続きの内容
 
 ---
@@ -196,7 +196,11 @@ SfM               ↓ GDALパイプライン       タイル / COG      deck.gl 
 - **第6回**：右半分。3D表示・NDWI等とのオーバーレイ・現地調査ツール化
 
 これまでのタイル配信（第1〜2回）の知識がそのまま活きる：
-Terrain RGBタイルも **XYZタイルピラミッド** であり、PMTiles化・Nginx静的配信が可能
+
+- Terrain RGBタイルの実体は、第1回で扱った地図タイルと同じ
+  **「ズームごとに世界を格子に割って `{z}/{x}/{y}.png` を並べたもの」**
+- 違いはPNGの中身が「地図の絵」ではなく「標高値をRGBに詰めた数値」である点だけ
+- したがってPMTiles化もNginx静的配信もそのまま使える
 
 ---
 
@@ -294,6 +298,23 @@ Terrain RGBタイルも **XYZタイルピラミッド** であり、PMTiles化�
 
 ---
 
+## 高精細DEMが変えた地形判読：CS立体図・赤色立体図
+
+航空LiDAR由来の高解像度DTMが普及して初めて成立した可視化表現：
+
+| 表現 | 考案 | 作り方の骨子 | 得意分野 |
+|---|---|---|---|
+| 赤色立体図 | アジア航測（千葉達朗氏） | 傾斜を赤の彩度、尾根谷度を明度に割当 | 火山地形、微地形の一枚判読 |
+| CS立体図 | 長野県林業総合センター | 曲率(Curvature)+傾斜(Slope)を標高段彩に重畳 | 林内の路網設計、崩壊地・地すべり判読 |
+
+- 陰影起伏（hillshade）と違い**光源方向に依存しない** → 谷の向きで見落としが出ない
+- 樹木を除去したDTMに適用することで、**植生下の微地形**（治山堰堤・旧河道・城郭遺構）が机上で判読できるようになった
+- 林業・砂防分野で判読作業の標準になりつつあり、「Q地図タイル」等で全国のCS立体図タイルが公開されている → 自作せずタイルとして重ねる使い方も可能
+
+<p class="note">赤色立体図は特許化されている表現（利用条件の確認が必要）。CS立体図は手法が公開されておりGDAL/QGISで自作できる。第6回のオーバーレイ素材としても扱う</p>
+
+---
+
 <!-- _class: dark -->
 
 # Part 2
@@ -373,7 +394,16 @@ COG の内部レイアウト
 | LAZ | LASの可逆圧縮版。1/7〜1/10程度に縮む。laszip / PDAL で相互変換 |
 | COPC | LAZ内部を八分木配置しRange Request対応にしたもの（COGの点群版） |
 
-DEM生成との関係：
+中身の確認（バイナリだがヘッダはツールで読める）：
+
+```sh
+pdal info --metadata input.laz
+```
+```json
+{ "count": 12873456, "srs": {"horizontal": "EPSG:6669", ...},
+  "minz": 2.31, "maxz": 187.42,
+  "creation_year": 2023, "point_format": 6 }
+```
 
 - 点レコードの**分類コード**（2=地面, 5=高植生 等）でフィルタ → 地面点のみでDTM
 - `pdal` の `writers.gdal` や `gdal_grid` でグリッド化 → GeoTIFF化
@@ -431,17 +461,157 @@ height = -10000 + ((R * 256 * 256 + G * 256 + B) * 0.1)
 
 ## 主要な高さデータソース
 
-| データ | 提供 | 解像度 | 由来 | 備考 |
+| データ | 提供 | 解像度 | 入手形式（拡張子） | 由来・備考 |
 |---|---|---|---|---|
-| SRTM | NASA/USGS | 30m (1秒) | スペースシャトルInSAR (2000年) | 取得年が古い点に注意 |
-| AW3D30 | JAXA | 30m | ALOS光学立体視 | 全球・無償版 |
-| 基盤地図情報 数値標高モデル | 国土地理院 | 10m / 5m / 1m | 航空写真測量・航空LiDAR | 5m/1mは整備範囲に差 |
-| 地理院 標高タイル | 国土地理院 | ズーム別 | 上記をタイル化 | PNG方式は独自エンコード |
-| 県公開LiDAR点群 | 各県 | 点密度依存 | 航空LiDAR | G空間情報センター等で公開 |
+| SRTM | NASA/USGS | 30m (1秒) | `.hgt` / GeoTIFF | シャトルInSAR (2000年)。取得年が古い |
+| AW3D30 | JAXA | 30m | GeoTIFF (`.tif`) | ALOS光学立体視。全球・無償版 |
+| 基盤地図情報 数値標高モデル | 国土地理院 | 10m / 5m / 1m | JPGIS GML (`.xml`) | 5m/1mは整備範囲に差 |
+| 地理院 標高タイル | 国土地理院 | ズーム別 | `.txt` / `.png` タイル | PNG方式は独自エンコード |
+| GSI 1mメッシュDEM | 国土地理院 | 1m | 公開形態を要確認 | 整備範囲拡大中（後述） |
+| 県公開LiDAR点群 | 各県 | 点密度依存 | `.las` / `.laz` | G空間情報センター等 |
 
-確認の手順：**解像度 → DSM/DTMの別 → 取得年 → CRS・標高基準 → ライセンス**
+確認の手順：**解像度 → DSM/DTMの別 → 取得年 → CRS・標高基準 → 形式 → ライセンス**
 
-<p class="note">山口県周辺のデータ整備状況はハンズオン資料内のリンク集を参照</p>
+<p class="note">ここで一度手を止めて、実際にG空間情報センター・基盤地図情報DLサイトを一緒にブラウジングします（5分）</p>
+
+---
+
+## 中身を覗く：テキストで読める高さデータもある
+
+**基盤地図情報 数値標高モデル（JPGIS GML / .xml）**：グリッド値がテキストで並ぶ
+
+```xml
+<gml:tupleList>
+gnd,135.42
+gnd,135.51
+gnd,135.63   ← 「種別,標高値」が西→東、北→南の順に1点1行
+...
+</gml:tupleList>
+```
+
+**地理院標高タイル（テキスト形式 / .txt）**：256×256のCSVそのもの
+
+```
+168.3,168.1,167.8,...   ← 1行が256列。値は標高[m]、無効値は "e"
+169.0,168.7,e,e,...
+```
+
+- テキストで読める形式は**中身の意味を目で確かめる教材として最適**
+- 一方で容量・パース速度の面でWeb配信には不向き → だからバイナリ形式とエンコードが要る
+
+---
+
+## 形式ごとに「Webでどう使うか」の対応表
+
+| 入手形式 | そのままWebで使えるか | Webで使うための経路 |
+|---|---|---|
+| JPGIS GML (`.xml`) | 使えない | GeoTIFFに変換（QGIS / 変換ツール）→ 本日のパイプラインへ |
+| GeoTIFF (`.tif`) | ほぼ不可（巨大・非タイル） | COG化してRange配信 or Terrain RGBタイル化 |
+| COG | 使える | `gdal_translate -of COG`。クライアント側でRange読み |
+| 地理院標高タイルPNG | MapLibre標準では不可 | 独自エンコードのためカスタムデコードが必要 |
+| Terrain RGB / Terrarium タイル | 使える | MapLibre `raster-dem` が標準対応。本日の到達点 |
+| LAS/LAZ 点群 | 使えない | PDALでDEM化 → 上記へ合流 / 点群のままなら第4回の経路 |
+
+**「入手形式」と「Web配信形式」は別物**。この間を埋めるのがGDALパイプライン
+
+---
+
+## 公開タイルをそのまま使う選択肢：Mapterhorn
+
+自前変換の対極として、**全球の地形タイルセットを静的PMTilesで公開**するプロジェクトが登場している（2025年〜、Protomaps周辺コミュニティ）
+
+- <a href="https://mapterhorn.com">Mapterhorn</a>：Copernicus DEM・swissALTI3D等のオープンDEMを統合しタイル化
+- **Terrariumエンコード・512pxタイル・WebP** で配信。MapLibreが標準デコード対応
+
+```js
+terrainSource: {
+  type: "raster-dem",
+  tiles: ["https://tiles.mapterhorn.com/{z}/{x}/{y}.webp"],
+  encoding: "terrarium",   // Mapbox方式ではない点に注意
+  tileSize: 512            // 256のままだと地形が破綻する典型ハマりポイント
+}
+```
+
+- `pmtiles extract --bbox=...` で**必要範囲だけ切り出して自前ホスト**もできる
+  → 第2回の静的配信構成にそのまま載る。本日のパイプラインの「完成形の見本」
+
+---
+
+## ジオイド問題への現代的な回答：Re:earth Terrain
+
+Part 3後半で触れる「楕円体高と標高のずれ」に正面から取り組んだ国産プロジェクト
+
+- <a href="https://terrain.reearth.land">terrain.reearth.land</a>（Re:earth / Eukarya）
+- Mapterhorn由来のDEMに **EGM2008ジオイドをリクエスト時に合成**し、
+  レンダラーが描いている楕円体面に高さを合わせて配信する
+- 出力形式は3種：**quantized-mesh-1.0（Cesium向け）/ Mapbox Terrain-RGB / Terrarium**
+
+使い分けの目安：
+
+- 通常の2.5D地形表示（MapLibre）→ Mapterhornで十分
+- **GNSS実測値との比較・Cesiumシーンとの合成**など楕円体高が要る場面 → Re:earth Terrain
+
+<p class="note">「同じDEMでも、どの基準面の高さとして配るか」という設計の違いが形式選択に現れる好例</p>
+
+---
+
+## ライブラリ別：DEMをどう食わせるか（第6回への見取り図）
+
+| ライブラリ | DEMの入口 | 一言メモ |
+|---|---|---|
+| MapLibre | `raster-dem`ソース + `setTerrain` / `hillshade` | Terrain RGB / Terrariumを標準デコード。最短経路 |
+| deck.gl | `TerrainLayer`（elevationData + texture） | エンコード式を`elevationDecoder`で自分で指定する設計 |
+| CesiumJS | quantized-mesh（Terrain Provider） | ラスタータイルではなくメッシュ。Re:earth Terrainが直結 |
+| Three.js | 自前：タイルPNG取得→デコード→`PlaneGeometry`頂点変位 | **1メッシュ分だけ高精度DEMを読む**ような小回りが利く |
+| AR.js | DEM値をカメラ座標系の高さに変換して重畳 | 方位ずれ補正が必須（第3回の補正コントローラ実装を参照） |
+
+- Three.js経路は「タイルの中身が数値である」ことを最も実感できる教材
+- AR適用は第6回で扱う予定（第3回実装の続き）
+- 実装例の宝庫：<a href="https://github.com/shiwaku">github.com/shiwaku</a>（shi worksさんの一連のデモ。MapLibre/deck.gl/Cesium/3DGSまで網羅的）
+
+---
+
+## 全域公開の点群から「自分でDSMを作る」
+
+近年、都県単位で航空LiDAR点群そのものがオープンデータ化されている：
+
+| 提供 | 名称・公開先 | 形式 |
+|---|---|---|
+| 静岡県 | VIRTUAL SHIZUOKA（G空間情報センター） | LAS/LAZ |
+| 東京都 | 都デジタルツイン実現プロジェクトの点群データ | LAS 等 |
+| 長崎県 | オープンナガサキ（G空間情報センター） | LAS 等 |
+
+**意味するところ**：DEM/DSMを「配布された完成品」として受け取るのではなく、
+**点群から自分の目的に合った高さモデルを切り出して作れる**時代になった
+
+- 分類コードの選び方次第で DSM にも DTM にも CSM にもなる（Part 1の復習）
+- 取得年・点密度を自分で確認でき、更新差分（伐採・造成の検出）にも使える
+
+---
+
+## 点群 → DSM のグリッド化パイプライン
+
+```sh
+# 対象範囲のLAZをダウンロード後、PDALでグリッド化
+pdal pipeline dsm.json
+```
+
+```json
+{ "pipeline": [
+  "input.laz",
+  { "type": "filters.range", "limits": "returnnumber[1:1]" },
+  { "type": "writers.gdal",
+    "filename": "dsm.tif",
+    "resolution": 1.0,
+    "output_type": "max",
+    "nodata": -9999 }
+]}
+```
+
+- ファーストリターン + `max` → **DSM**／`Classification[2:2]` + `idw` → **DTM**
+- 出力はGeoTIFFなので、<span class="ok">ここから先は今日のGDALパイプラインにそのまま合流する</span>
+
+<p class="note">時間の都合で本日は流れの紹介まで。PDALパイプラインの詳細は handson/08_pointcloud_dsm を参照（第4回の点群処理の続きとしても読める）</p>
 
 ---
 
@@ -575,6 +745,28 @@ pmtiles convert terrain.mbtiles terrain.pmtiles
 
 ---
 
+## 発展：GSI 1mメッシュDEMで山口県内を高精細化
+
+国土地理院が**1mメッシュDEM**の整備・公開を進めている（整備範囲は順次拡大中）
+
+- 公開情報：<a href="https://www.gsi.go.jp/gazochosa/gazochosa61005.html">gsi.go.jp/gazochosa/gazochosa61005.html</a>
+- 本講座では**宇部新川駅周辺・あすとぴあ周辺**を対象範囲として用意
+
+10mとの違いが最も出るのは：
+
+- 河川堤防・道路の切土盛土・ため池の堤体といった**人工地形の輪郭**
+- max-z の設計：1m解像度なら **z16〜17まで意味がある**（10mではz14が上限の目安）
+
+```sh
+# 手順は本編と同一。max-z と対象範囲だけが変わる
+rio rgbify --min-z 10 --max-z 16 --interval 0.1 dem1m_cog.tif terrain1m.mbtiles
+```
+
+<span class="warn">処理時間・容量が10m比で大きく増える。ハンズオン中は完走できなくてよい</span>
+（`handson/07_gsi1m_yamaguchi` に手順一式。自宅で完走することを想定した構成）
+
+---
+
 ## パイプライン全体の再掲
 
 ```
@@ -629,7 +821,6 @@ terrain.pmtiles  →  Nginx静的配信  →  MapLibre hillshadeで検証
 - 今日作った `terrain.pmtiles` を **MapLibre terrain / deck.gl TerrainLayer** で3D表示
 - NDWIラスター・防災重点溜池（国土数値情報）とのオーバーレイ
 - 垂直誇張・hillshadeのパラメータ設計
-- スマホブラウザで動く現地調査ツールへの仕上げ
-- 通信前提設計とオフライン設計（PWA）の判断基準
+- スマホブラウザからそのまま現地で使える形に仕上げる
 
-<p class="note">今日の成果物（terrain.pmtiles / dem_cog.tif）を次回そのまま使用します。削除せずに保管してください</p>
+
