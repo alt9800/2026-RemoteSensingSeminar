@@ -1,3 +1,5 @@
+[ハンズオン目次に戻る](../)
+
 # 04. Terrain RGBエンコード
 
 標高値（Float32）を、PNGの24bit（RGB）に詰め替えます。
@@ -61,3 +63,7 @@ gdal2tiles.py --xyz -z 8-14 -r bilinear terrain_rgb.tif tiles/
 
 - gdal2tiles出力（ディレクトリ形式）は `pmtiles convert` ではなく、mb-util等でmbtiles化してからPMTiles化するか、そのままNginxに置いて `{z}/{x}/{y}.png` として配信できます
 - こちらの経路は「エンコードの中身を完全に自分の手で追える」利点があります。時間があれば両方試してください
+
+---
+
+前: [03. COG化と検証](../03_cog/) ｜ 次: [05. PMTiles化と配信](../05_tiles_pmtiles/)

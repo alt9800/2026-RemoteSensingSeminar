@@ -1,3 +1,5 @@
+[ハンズオン目次に戻る](../)
+
 # 06. MapLibre hillshadeによる目視検証
 
 「正しいタイルが作れたか」をhillshade（陰影起伏）表示で検証します。3D表示（terrain）は第6回で扱います。
@@ -5,7 +7,7 @@
 ## 手順
 
 1. `terrain.pmtiles` をこのディレクトリの `app/` にコピー（または05の配信URLを使用）
-2. `app/index.html` をローカルサーバー経由で開く
+2. [`app/index.html`](./app/index.html) をローカルサーバー経由で開く
 
 ```sh
 cd app
@@ -29,3 +31,7 @@ file:// で直接開くとPMTilesのRange Requestが動きません。必ずロ�
 - MapLibre GL JS + pmtiles.js（第2回と同じ構成）
 - `raster-dem` ソース + `hillshade` レイヤーのみの最小構成
 - ソースURLは冒頭の `TERRAIN_URL` 定数で変更できます
+
+---
+
+前: [05. PMTiles化と配信](../05_tiles_pmtiles/) ｜ 次: [07. GSI 1mメッシュ（発展）](../07_gsi1m_yamaguchi/)

@@ -1,3 +1,5 @@
+[ハンズオン目次に戻る](../)
+
 # 08. 発展：県公開の点群からPDALでDSMを自作する
 
 静岡（VIRTUAL SHIZUOKA）・東京（都デジタルツイン点群）・長崎（オープンナガサキ）など、都県単位で航空LiDAR点群がオープンデータ化されています。ここでは点群1タイルからDSM/DTMを作り、本編パイプラインに合流させます。
@@ -72,3 +74,7 @@ gdal_calc.py -A dsm.tif -B dtm.tif --outfile=csm.tif --calc="A-B" --NoDataValue=
 
 - 同じ場所のDSMとDTMを06のビューアで見比べると、DSM/DTMの違い（Part 1）が視覚的に理解できます
 - CSMで市街地を見ると建物高が、山林を見ると樹高が浮かび上がります
+
+---
+
+前: [07. GSI 1mメッシュ（発展）](../07_gsi1m_yamaguchi/)

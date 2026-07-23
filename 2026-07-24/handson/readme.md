@@ -25,15 +25,15 @@ terrain.pmtiles → 06: MapLibre hillshadeで検証
 
 | ディレクトリ | 内容 | 当日の扱い |
 |---|---|---|
-| `00_setup` | GDAL / rio-cogeo / rio-rgbify / pmtiles の導入 | 事前準備推奨 |
-| `01_gdalinfo` | データ構造の確認 | ハンズオン |
-| `02_warp_clip` | 座標変換・クリップ・リサンプリング | ハンズオン |
-| `03_cog` | COG化と検証 | ハンズオン |
-| `04_terrainrgb` | Terrain RGBエンコード | ハンズオン |
-| `05_tiles_pmtiles` | PMTiles化と配信 | ハンズオン |
-| `06_preview` | MapLibreによる目視検証 | ハンズオン |
-| `07_gsi1m_yamaguchi` | GSI 1mメッシュ（宇部新川・あすとぴあ周辺）の高精細化 | 発展・持ち帰り |
-| `08_pointcloud_dsm` | 県公開点群からPDALでDSMを自作 | 発展・持ち帰り |
+| [`00_setup`](./00_setup/) | GDAL / rio-cogeo / rio-rgbify / pmtiles の導入 | 事前準備推奨 |
+| [`01_gdalinfo`](./01_gdalinfo/) | データ構造の確認 | ハンズオン |
+| [`02_warp_clip`](./02_warp_clip/) | 座標変換・クリップ・リサンプリング | ハンズオン |
+| [`03_cog`](./03_cog/) | COG化と検証 | ハンズオン |
+| [`04_terrainrgb`](./04_terrainrgb/) | Terrain RGBエンコード | ハンズオン |
+| [`05_tiles_pmtiles`](./05_tiles_pmtiles/) | PMTiles化と配信 | ハンズオン |
+| [`06_preview`](./06_preview/) | MapLibreによる目視検証 | ハンズオン |
+| [`07_gsi1m_yamaguchi`](./07_gsi1m_yamaguchi/) | GSI 1mメッシュ（宇部新川・あすとぴあ周辺）の高精細化 | 発展・持ち帰り |
+| [`08_pointcloud_dsm`](./08_pointcloud_dsm/) | 県公開点群からPDALでDSMを自作 | 発展・持ち帰り |
 
 ## 前提
 
@@ -43,3 +43,7 @@ terrain.pmtiles → 06: MapLibre hillshadeで検証
 ## 重要：成果物の保管
 
 `terrain.pmtiles` と `dem_cog.tif` は**第6回でそのまま使用します**。削除しないでください。
+
+## 講師用
+
+- [`faculty/README.md`](./faculty/)：事前検証チェックリスト・当日運用メモ（参加者は読む必要はありません）

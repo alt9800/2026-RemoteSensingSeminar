@@ -1,3 +1,5 @@
+[ハンズオン目次に戻る](../)
+
 # 05. PMTiles化と配信
 
 ## 変換
@@ -28,3 +30,7 @@ python3 -m http.server 8000
 - Nginxの場合、Rangeは標準で有効です。CORSが必要な構成（別オリジンから読む場合）は第2回資料の `add_header` 設定を参照してください
 
 次の `06_preview` で表示検証を行います。
+
+---
+
+前: [04. Terrain RGBエンコード](../04_terrainrgb/) ｜ 次: [06. MapLibre hillshadeによる目視検証](../06_preview/)
