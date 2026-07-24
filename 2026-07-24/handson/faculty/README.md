@@ -10,7 +10,7 @@
 
 | # | 検証項目 | 合格条件 | 記録欄 |
 |---|---|---|---|
-| 1 | 配布DEMの `gdalinfo -stats` | CRS・NoData・標高レンジが資料の記述と一致 | EPSG: ____ / NoData: ____ |
+| 1 | fgd zip → `fgd2tif.py` → `gdalinfo -stats` | スクリプトが実データで完走し、CRS・NoData・標高レンジが妥当 | EPSG: ____ / NoData: ____ |
 | 2 | 02のgdalwarpコマンド（座標値を実データで確定） | エラーなく完走。出力のCRSが3857 | 所要: ____ 秒 |
 | 3 | `-te` の確定座標値を02のreadmeに転記 | プレースホルダーが残っていない | 済 / 未 |
 | 4 | rio cogeo create / validate | validate合格 | サイズ: ____ MB |
@@ -25,7 +25,7 @@
 
 ## 1. 資料内の未確定値（配布前に必ず差し替える）
 
-- 配布データ `dem_src.tif` の共有URL：現状「当日案内（Slack等）」とだけ記載。確定したら`01_gdalinfo/readme.md` に追記するか、当日Slackに流す運用のままにするかを決める。手順検証に使ったデータをそのまま流す運用で可。脱落者が出ても事前生成物（下記5節）で合流できる
+- 配布データ `dem_src.tif` の共有URL：現状「当日案内（Slack等）」とだけ記載。確定したら`01_gdalinfo/readme.md` に追記するか、当日Slackに流す運用のままにするかを決める。手順検証に使ったデータをそのまま流す運用で可。脱落者が出ても事前生成物（下記5節）で合流できる。配布用 `dem_src.tif` の作成自体は `01_gdalinfo/fgd2tif.py`（FGD zip→GeoTIFF一括変換。合成データで動作検証済み・実データ未検証）で数分で済む想定。実データで一度通し、NoData縁と海域の値を確認すること
 - `02_warp_clip/readme.md`：`EPSG:XXXX` と `-te <xmin> ...`（検証#2-3で確定）
 - `06_preview/app/index.html`：`CENTER`（宇部市周辺の仮値が入っている）
 - `07_gsi1m_yamaguchi/readme.md`：GSI 1mメッシュの提供形式・DL手順（公開ページの現況に合わせる）。スライド側の「公開形態を要確認」の記述も確定後に更新する

@@ -11,11 +11,16 @@
 **自宅で再現する場合（配布に依存しない経路）**：
 
 1. 基盤地図情報ダウンロードサイト（https://fgd.gsi.go.jp/download/）で「数値標高モデル」→ 10mメッシュ（DEM10B）を選択し、対象範囲のメッシュをダウンロード（要無料アカウント）
-2. 取得物はJPGIS GML（.xml）です。GeoTIFFへの変換が必要です：
-   - QGISに変換プラグインを導入して読み込み → GeoTIFFエクスポート、または
-   - コミュニティ製の基盤地図情報標高DEM変換ツールを使用
-   - 複数メッシュの結合を含む具体的な手順は [07_gsi1m_yamaguchi](../07_gsi1m_yamaguchi/) の「JPGIS GML → GeoTIFF変換」節と同じです（あちらは1m、こちらは10mという違いだけ）
-3. 変換後のGeoTIFFを `dem_src.tif` として以降の手順に使います
+2. 取得物はJPGIS GML（.xml）です。同梱の変換スクリプトで一括変換します：
+
+```sh
+pip install rasterio numpy
+python3 fgd2tif.py FG-GML-*.zip -o dem_src.tif
+```
+
+   ダウンロードしたzipをそのまま複数渡せます（展開・パース・結合まで自動）。出力はEPSG:6668・NoData=-9999のGeoTIFFで、そのまま以降の手順に使えます。
+   スクリプトを使わない場合は、QGISの変換プラグイン等でも同じものが作れます（[07_gsi1m_yamaguchi](../07_gsi1m_yamaguchi/) の変換節を参照）
+3. できあがった `dem_src.tif` で以降の手順に進みます
 
 変換まで済ませたものが当日の配布データです。自分で変換したデータと配布データで `gdalinfo` の出力を見比べるのも良い演習になります。
 
