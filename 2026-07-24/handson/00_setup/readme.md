@@ -74,8 +74,14 @@ go-pmtiles（Go実装）のCLIツールです。これまでの回では扱っ�
 ### macOS
 
 ```sh
-brew install protomaps/tap/pmtiles
+brew install pmtiles
 pmtiles version
+```
+
+Homebrew版は以下のように具体的なバージョン番号ではなく `dev` と表示されることがあります。ビルド時の情報が埋め込まれていないためで、動作自体に問題はありません。
+
+```
+pmtiles dev, commit none, built at unknown
 ```
 
 ### Linux / Windows（バイナリ取得）
