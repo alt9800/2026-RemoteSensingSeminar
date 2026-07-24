@@ -11,7 +11,9 @@
     python3 fgd2tif.py *.xml -o dem_src.tif        # 展開済みxmlでも可
 
 仕様メモ:
-    - 出力CRSは JGD2011 地理座標 (EPSG:6668)。以降は 02 の gdalwarp へ。
+    - 出力CRSは EPSG:6668（地理座標）。2025年以降のデータは srsName が
+      jgd2024.bl だが、JGD2024は鉛直基準の改定で緯度経度は不変のため
+      EPSG:6668 の継続使用が正しい（標高値はJGD2024基準になる点に留意）。
     - 「データなし」等の非数値・海水面等は NoData(-9999) にする。
     - tupleList は startPoint オフセット + "+x-y" 順(西→東、北→南)を前提とする。
       DEM10B/5A/5B/1m(DEM1A) いずれも同一構造。
