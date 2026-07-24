@@ -2,6 +2,10 @@
 
 # 05. PMTiles化と配信
 
+## 前提
+
+`terrain.mbtiles`が手元にある状態から始めます。04でrio-rgbifyが成功していればそのまま、rio-rgbifyが失敗して代替手順（gdal_calc経路）を使った場合は`gdal_translate ... -of MBTILES`で生成したものを使ってください。いずれの経路でも以降の手順は同じです。
+
 ## 変換
 
 ```sh
