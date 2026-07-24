@@ -38,7 +38,7 @@ terrain.pmtiles → 06: MapLibre hillshadeで検証
 ## 前提
 
 - 第1〜2回のPMTiles / Nginx静的配信の環境（`pmtiles` CLI）があると05以降がスムーズです
-- 配布データ `dem_src.tif` は講師から共有されるURLから取得してください
+- 配布データ `dem_src.tif` の入手方法は [01_gdalinfo](./01_gdalinfo/) 冒頭を参照してください（当日配布URL／自分で基盤地図情報から作る手順の両方を記載）
 
 ## 重要：成果物の保管
 
