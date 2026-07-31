@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ハザードビューア（地形 + NDWI + 防災重点溜池）</title>
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/pmtiles@3.2.0/dist/pmtiles.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; }
+    #map { position: absolute; inset: 0; }
+    #panel {
+      position: absolute;
+      bottom: 24px; left: 8px;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-family: sans-serif;
+      font-size: 13px;
+      color: #1a1a1a;
+      max-width: min(320px, calc(100vw - 32px));
+    }
+    #panel h1 { font-size: 14px; margin: 0 0 6px; }
+    #panel .row { margin: 4px 0; }
+    #panel label { display: flex; align-items: center; gap: 6px; }
+    #panel input[type="range"] { flex: 1; min-width: 100px; }
+    #status { font-size: 11px; color: #B91C1C; margin-top: 6px; white-space: pre-line; }
+    @media (max-width: 480px) {
+      #panel { font-size: 12px; padding: 6px 8px; left: 8px; right: 8px; max-width: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="panel">
+    <h1>地形 + NDWI + 防災重点溜池</h1>
+    <div class="row">
+      <label>垂直誇張 <input type="range" id="exag" min="0" max="3" step="0.1" value="1.5">
+        <span id="exag-label">1.5</span></label>
+    </div>
+    <div class="row">
+      <label>NDWI不透明度 <input type="range" id="op" min="0" max="1" step="0.05" value="0.6">
+        <span id="op-label">0.6</span></label>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="terrain-toggle" checked> 3D地形</label>
+      <label><input type="checkbox" id="loc-toggle"> 現在位置を追従</label>
+    </div>
+    <div id="status"></div>
+  </div>
+  <div id="map"></div>
+
+  <script>
+    // ── 設定 ─────────────────────────────────────────────
+    // 本番（composite）。未生成の場合はサンプルに自動フォールバックする
+    const TERRAIN_MAIN = {
+      url: "pmtiles://../terrain_composite_ube_yamaguchi.pmtiles",
+      probe: "../terrain_composite_ube_yamaguchi.pmtiles",
+      center: [131.28, 33.98], zoom: 12, minzoom: 8, maxzoom: 17
+    };
+    // サンプル（1mメッシュ503172のみ・z14–17）。範囲外はタイルなし
+    const TERRAIN_SAMPLE = {
+      url: "pmtiles://../terrain_1m_503172.pmtiles",
+      probe: "../terrain_1m_503172.pmtiles",
+      center: [131.256, 33.983], zoom: 14, minzoom: 14, maxzoom: 17
+    };
+    const NDWI_TILES  = "../ndwi/{z}/{x}/{y}.png";
+    const NDWI_PROBE  = "../ndwi/10/885/409.png"; // 対象範囲内の1枚（z10, 宇部市付近）。配置に合わせて調整可
+    const TAMEIKE_URL = "../tameike.geojson";
+    // ─────────────────────────────────────────────────────
+
+    const protocol = new pmtiles.Protocol();
+    maplibregl.addProtocol("pmtiles", protocol.tile);
+
+    // Rangeリクエストで存在確認（GitHub Pages等はHEAD不可のことがある）
+    async function exists(url) {
+      try {
+        const r = await fetch(url, { headers: { Range: "bytes=0-0" } });
+        return r.ok;
+      } catch { return false; }
+    }
+
+    (async () => {
+      const notes = [];
+      let terrain = TERRAIN_MAIN;
+      if (!(await exists(TERRAIN_MAIN.probe))) {
+        terrain = TERRAIN_SAMPLE;
+        notes.push("⚠ composite未配置 → サンプル(503172, z14–17)で表示中");
+        if (!(await exists(TERRAIN_SAMPLE.probe))) {
+          notes.push("⚠ サンプルpmtilesも見つからない（地形なし）");
+          terrain = null;
+        }
+      }
+      const hasNdwi = await exists(NDWI_PROBE);
+      if (!hasNdwi) notes.push("⚠ NDWIタイル未配置（ndwi/…）");
+      const hasTameike = await exists(TAMEIKE_URL);
+      if (!hasTameike) notes.push("⚠ tameike.geojson未配置（00_setup参照）");
+
+      document.getElementById("status").textContent = notes.join("\n");
+
+      const sources = {
+        gsi_pale: {
+          type: "raster",
+          tiles: ["https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png"],
+          tileSize: 256,
+          maxzoom: 18,
+          attribution: "地理院タイル / 国土数値情報 / Sentinel-2"
+        }
+      };
+      const layers = [{ id: "base", type: "raster", source: "gsi_pale" }];
+
+      if (terrain) {
+        sources.terrainSource = {
+          type: "raster-dem",
+          url: terrain.url,
+          encoding: "mapbox",
+          tileSize: 256,
+          minzoom: terrain.minzoom,
+          maxzoom: terrain.maxzoom
+        };
+        layers.push({
+          id: "hillshade", type: "hillshade", source: "terrainSource",
+          paint: { "hillshade-exaggeration": 0.5 }
+        });
+      }
+      if (hasNdwi) {
+        sources.ndwi = {
+          type: "raster", tiles: [NDWI_TILES],
+          tileSize: 256, minzoom: 10, maxzoom: 14
+        };
+        layers.push({
+          id: "ndwi-layer", type: "raster", source: "ndwi",
+          paint: { "raster-opacity": 0.6 }
+        });
+      }
+      if (hasTameike) {
+        sources.tameike = { type: "geojson", data: TAMEIKE_URL };
+        layers.push({
+          id: "tameike-pt", type: "circle", source: "tameike",
+          paint: {
+            "circle-radius": 6,
+            "circle-color": "#B91C1C",
+            "circle-stroke-color": "#ffffff",
+            "circle-stroke-width": 1.5
+          }
+        });
+      }
+
+      const map = new maplibregl.Map({
+        container: "map",
+        center: terrain ? terrain.center : TERRAIN_MAIN.center,
+        zoom: terrain ? terrain.zoom : TERRAIN_MAIN.zoom,
+        pitch: 55,
+        maxPitch: 85,
+        style: { version: 8, sources, layers }
+      });
+
+      map.addControl(new maplibregl.NavigationControl(), "top-right");
+
+      map.on("load", () => {
+        map.resize(); // 環境によりResizeObserverが初期サイズを拾えないことへの保険
+        if (terrain && document.getElementById("terrain-toggle").checked) {
+          map.setTerrain({ source: "terrainSource", exaggeration: 1.5 });
+        }
+      });
+      window.addEventListener("resize", () => map.resize());
+
+      // ── 溜池ポップアップ ─────────────────────────────────
+      map.on("click", "tameike-pt", (e) => {
+        const p = e.features[0].properties;
+        new maplibregl.Popup()
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<strong>${p.name ?? "(名称不明)"}</strong><br>` +
+            `堤高: ${p.height ?? "-"} m<br>貯水量: ${p.volume ?? "-"} m³`
+          )
+          .addTo(map);
+      });
+      map.on("mouseenter", "tameike-pt", () => map.getCanvas().style.cursor = "pointer");
+      map.on("mouseleave", "tameike-pt", () => map.getCanvas().style.cursor = "");
+
+      // ── UI ───────────────────────────────────────────────
+      const exag = document.getElementById("exag");
+      exag.addEventListener("input", () => {
+        document.getElementById("exag-label").textContent = exag.value;
+        if (terrain && document.getElementById("terrain-toggle").checked) {
+          map.setTerrain({ source: "terrainSource", exaggeration: Number(exag.value) });
+        }
+      });
+      const op = document.getElementById("op");
+      op.addEventListener("input", () => {
+        document.getElementById("op-label").textContent = op.value;
+        if (hasNdwi) map.setPaintProperty("ndwi-layer", "raster-opacity", Number(op.value));
+      });
+      document.getElementById("terrain-toggle").addEventListener("change", (e) => {
+        if (!terrain) { e.target.checked = false; return; }
+        map.setTerrain(e.target.checked
+          ? { source: "terrainSource", exaggeration: Number(exag.value) }
+          : null);
+      });
+
+      // ── 現在位置の追従（第3回の復習）────────────────────
+      let watchId = null;
+      let marker = null;
+      document.getElementById("loc-toggle").addEventListener("change", (e) => {
+        if (e.target.checked) {
+          watchId = navigator.geolocation.watchPosition((pos) => {
+            const lngLat = [pos.coords.longitude, pos.coords.latitude];
+            if (!marker) {
+              marker = new maplibregl.Marker({ color: "#028090" }).setLngLat(lngLat).addTo(map);
+            } else {
+              marker.setLngLat(lngLat);
+            }
+          }, (err) => {
+            alert("位置情報の取得に失敗: " + err.message);
+            e.target.checked = false;
+          }, { enableHighAccuracy: true });
+        } else if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
+          watchId = null;
+          if (marker) { marker.remove(); marker = null; }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

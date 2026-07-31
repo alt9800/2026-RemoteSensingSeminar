@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Terrain RGB 3Dビューア</title>
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/pmtiles@3.2.0/dist/pmtiles.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; }
+    #map { position: absolute; inset: 0; }
+    /* 操作パネル：モバイルでは親指の届く下端に置く */
+    #panel {
+      position: absolute;
+      bottom: 24px; left: 8px;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-family: sans-serif;
+      font-size: 13px;
+      color: #1a1a1a;
+      max-width: min(320px, calc(100vw - 32px));
+    }
+    #panel h1 { font-size: 14px; margin: 0 0 6px; }
+    #panel .row { margin: 4px 0; }
+    #panel label { display: flex; align-items: center; gap: 6px; }
+    #panel input[type="range"] { flex: 1; min-width: 120px; }
+    #panel code { background: #f0f0f0; padding: 1px 4px; border-radius: 2px; }
+    @media (max-width: 480px) {
+      #panel { font-size: 12px; padding: 6px 8px; left: 8px; right: 8px; max-width: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="panel">
+    <h1>Terrain RGB 3Dビューア</h1>
+    <div class="row">ソース: <code id="src-label"></code></div>
+    <div class="row">
+      <label>垂直誇張 <input type="range" id="exag" min="0" max="3" step="0.1" value="1.5">
+        <span id="exag-label">1.5</span></label>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="terrain-toggle" checked> 3D地形</label>
+      <label><input type="checkbox" id="hs-toggle" checked> hillshade</label>
+    </div>
+    <div class="row">ズーム: <span id="zoom-label">-</span> ／
+      クリック地点の標高: <span id="elev-label">-</span></div>
+  </div>
+  <div id="map"></div>
+
+  <script>
+    // ── 設定 ─────────────────────────────────────────────
+    // 自分の成果物のパスに合わせて変更する。
+    const TERRAIN_URL = "pmtiles://../terrain_1m_503172.pmtiles";
+    // 表示初期位置（データの中心付近に合わせる）
+    const CENTER = [131.256, 33.983];
+    const ZOOM = 14;
+    // pmtiles show で確認した実際のズーム範囲に必ず一致させる。
+    // 実データより低いminzoomを書いても、そのズームにタイルは存在しない。
+    const MINZOOM = 14;
+    const MAXZOOM = 17;
+    // ─────────────────────────────────────────────────────
+
+    document.getElementById("src-label").textContent = TERRAIN_URL;
+
+    const protocol = new pmtiles.Protocol();
+    maplibregl.addProtocol("pmtiles", protocol.tile);
+
+    const map = new maplibregl.Map({
+      container: "map",
+      center: CENTER,
+      zoom: ZOOM,
+      pitch: 60,
+      maxPitch: 85,
+      style: {
+        version: 8,
+        sources: {
+          gsi_pale: {
+            type: "raster",
+            tiles: ["https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png"],
+            tileSize: 256,
+            maxzoom: 18,
+            attribution: "地理院タイル"
+          },
+          terrainSource: {
+            type: "raster-dem",
+            url: TERRAIN_URL,
+            encoding: "mapbox",
+            tileSize: 256,
+            minzoom: MINZOOM,
+            maxzoom: MAXZOOM
+          }
+        },
+        layers: [
+          { id: "base", type: "raster", source: "gsi_pale" },
+          {
+            id: "hillshade",
+            type: "hillshade",
+            source: "terrainSource",
+            paint: {
+              "hillshade-exaggeration": 0.6,
+              "hillshade-shadow-color": "#5a4a33"
+            }
+          }
+        ]
+      }
+    });
+
+    map.addControl(new maplibregl.NavigationControl(), "top-right");
+
+    map.on("load", () => {
+      map.setTerrain({ source: "terrainSource", exaggeration: 1.5 });
+    });
+
+    // ── UI ───────────────────────────────────────────────
+    const exag = document.getElementById("exag");
+    exag.addEventListener("input", () => {
+      document.getElementById("exag-label").textContent = exag.value;
+      if (document.getElementById("terrain-toggle").checked) {
+        map.setTerrain({ source: "terrainSource", exaggeration: Number(exag.value) });
+      }
+    });
+    document.getElementById("terrain-toggle").addEventListener("change", (e) => {
+      map.setTerrain(e.target.checked
+        ? { source: "terrainSource", exaggeration: Number(exag.value) }
+        : null);
+    });
+    document.getElementById("hs-toggle").addEventListener("change", (e) => {
+      map.setLayoutProperty("hillshade", "visibility", e.target.checked ? "visible" : "none");
+    });
+    map.on("move", () => {
+      document.getElementById("zoom-label").textContent = map.getZoom().toFixed(2);
+    });
+
+    // ── クリック地点の標高（Terrain RGBを自前デコード）────
+    const pm = new pmtiles.PMTiles(TERRAIN_URL.replace("pmtiles://", ""));
+    map.on("click", async (e) => {
+      const label = document.getElementById("elev-label");
+      try {
+        // データが存在するズーム範囲にクランプする
+        const z = Math.max(MINZOOM, Math.min(Math.floor(map.getZoom()), MAXZOOM));
+        const n = Math.pow(2, z);
+        const lon = e.lngLat.lng, lat = e.lngLat.lat;
+        const xf = ((lon + 180) / 360) * n;
+        const latRad = (lat * Math.PI) / 180;
+        const yf = ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n;
+        const x = Math.floor(xf), y = Math.floor(yf);
+        const px = Math.floor((xf - x) * 256);
+        const py = Math.floor((yf - y) * 256);
+
+        const resp = await pm.getZxy(z, x, y);
+        if (!resp || !resp.data) { label.textContent = "タイルなし"; return; }
+
+        const blob = new Blob([resp.data], { type: "image/png" });
+        const bmp = await createImageBitmap(blob);
+        const cv = document.createElement("canvas");
+        cv.width = cv.height = 256;
+        const ctx = cv.getContext("2d");
+        ctx.drawImage(bmp, 0, 0);
+        const [r, g, b] = ctx.getImageData(px, py, 1, 1).data;
+
+        const h = -10000 + (r * 65536 + g * 256 + b) * 0.1;
+        // -10000m付近はNoData（データ被覆外）
+        label.textContent = h < -9000
+          ? "NoData（被覆外）"
+          : h.toFixed(1) + " m (R:" + r + " G:" + g + " B:" + b + ")";
+      } catch (err) {
+        label.textContent = "取得失敗: " + err.message;
+      }
+    });
+  </script>
+</body>
+</html>

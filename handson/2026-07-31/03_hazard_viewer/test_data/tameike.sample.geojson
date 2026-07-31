@@ -1,0 +1,4 @@
+{"type":"FeatureCollection","features":[
+{"type":"Feature","properties":{"name":"テスト池A","height":12.3,"volume":45600},"geometry":{"type":"Point","coordinates":[131.256,33.983]}},
+{"type":"Feature","properties":{"name":"テスト池B","height":null,"volume":null},"geometry":{"type":"Point","coordinates":[131.260,33.980]}}
+]}

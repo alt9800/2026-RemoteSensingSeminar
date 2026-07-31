@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="color-scheme" content="light">
+<title>農地レイヤーAR（筆ポリゴン・半径250m）</title>
+
+<script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+<script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/three.js/build/ar-threex-location-only.js"></script>
+<script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
+<link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet">
+
+<style>
+  :root {
+    --ink:#1A1A1A; --sub:#6B7280; --line:#C9CDD2; --accent:#2D7D46;
+    --bg:#FFFFFF; --panel:#F8FAFB; --warn:#B91C1C;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; }
+  body { font-family:"BIZ UDPGothic","Hiragino Sans",system-ui,sans-serif; color:var(--ink); }
+
+  #cam { position:fixed; inset:0; width:100%; height:100%; object-fit:cover; background:#000; z-index:0; }
+  a-scene { position:fixed; inset:0; width:100%; height:100%; z-index:2; }
+
+  #overlay {
+    position:fixed; inset:0; z-index:20; background:var(--bg);
+    display:flex; align-items:center; justify-content:center; padding:24px; overflow-y:auto;
+  }
+  #overlay .card { width:100%; max-width:420px; border:1px solid var(--line); padding:24px; }
+  #overlay h1 { font-size:1.1rem; margin:0 0 10px; }
+  #overlay p { font-size:.85rem; color:var(--sub); margin:0 0 12px; line-height:1.6; }
+  #overlay label { display:block; font-size:.82rem; margin:0 0 6px; }
+  #geojson-file { font-size:.8rem; width:100%; margin:0 0 16px; }
+  #radius-row { display:flex; align-items:center; gap:8px; margin:0 0 16px; }
+  #radius-row input { width:80px; font:inherit; padding:6px; border:1px solid var(--line); }
+  #start { font:inherit; width:100%; padding:12px 18px; background:var(--bg); color:var(--ink);
+    border:1.5px solid var(--ink); border-radius:2px; cursor:pointer; }
+
+  #hud {
+    position:fixed; top:0; left:0; right:0; z-index:15;
+    font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.72rem; line-height:1.5;
+    color:var(--ink); background:rgba(248,250,251,.85); padding:6px 10px; border-bottom:1px solid var(--line);
+    word-break:break-all;
+  }
+  #hud .err { color:var(--warn); }
+
+  #cam-toggle {
+    position:fixed; z-index:16; top:40px; right:8px; /* topはJSでHUDの実高さに追従させる。この値はJS実行前の暫定値 */
+    font:11px system-ui,sans-serif; padding:7px 10px;
+    background:rgba(248,250,251,.92); color:var(--ink); border:1.5px solid var(--ink); border-radius:2px;
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  }
+
+  /* カメラ映像を消す・隠すのではなく、映像とARシーンの間に半透明の黒を挟んで
+     映像だけを暗くする。ARの輪郭線・ラベルはこのレイヤーより上にあるため影響を受けない。 */
+  #dim-overlay {
+    position:fixed; inset:0; z-index:1; pointer-events:none;
+    background:rgba(0,0,0,0);
+  }
+  body.dimmed #dim-overlay { background:rgba(0,0,0,0.88); }
+
+  @media (max-width:380px) {
+    #cam-toggle { font-size:10px; padding:6px 8px; }
+  }
+
+  #minimap-wrap {
+    position:fixed; z-index:12;
+    right:12px; bottom:12px;
+    width:clamp(96px, 30vw, 150px);
+    height:clamp(96px, 30vw, 150px);
+    border:1.5px solid var(--ink);
+    border-radius:4px;
+    overflow:hidden;
+    background:var(--panel);
+    touch-action: manipulation;
+  }
+  #minimap-wrap.expanded {
+    right:0; bottom:0; left:0; top:0;
+    width:auto; height:auto;
+    border-radius:0;
+    z-index:25;
+  }
+  #minimap { position:absolute; inset:0; }
+  #minimap-tap { position:absolute; inset:0; z-index:2; background:transparent; touch-action: manipulation; }
+  #minimap-wrap.expanded #minimap-tap { display:none; }
+  #minimap-close {
+    position:absolute; top:10px; right:10px; z-index:3; display:none;
+    font:14px system-ui,sans-serif; padding:8px 12px;
+    background:#fff; color:var(--ink); border:1.5px solid var(--ink); border-radius:2px;
+    touch-action: manipulation;
+  }
+  #minimap-wrap.expanded #minimap-close { display:block; }
+  .beacon-marker svg { display:block; }
+
+  html, body { touch-action: manipulation; } /* 連続タップがダブルタップズームと誤認されるのを防ぐ */
+
+  #calib {
+    position:fixed; z-index:12; left:12px; bottom:12px;
+    max-width:min(60vw, 240px);
+    touch-action: manipulation;
+  }
+  #calib-toggle {
+    font:12px "IBM Plex Mono",ui-monospace,monospace; padding:8px 10px;
+    background:rgba(248,250,251,.92); color:var(--ink);
+    border:1.5px solid var(--ink); border-radius:2px;
+    touch-action: manipulation;
+  }
+  #calib-controls {
+    display:none; margin-top:6px; align-items:center;
+    background:rgba(248,250,251,.95); border:1.5px solid var(--ink); border-radius:2px;
+    padding:8px; gap:6px; flex-wrap:wrap; touch-action: manipulation;
+  }
+  #calib.expanded #calib-controls { display:flex; }
+  #calib-controls button {
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    font:10px system-ui,sans-serif; padding:6px 7px; background:#fff; color:var(--ink);
+    border:1px solid var(--ink); border-radius:2px; touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #calib-controls button svg { width:18px; height:18px; display:block; }
+  #calib-value { min-width:4em; text-align:center; font:12px "IBM Plex Mono",ui-monospace,monospace; }
+
+  @media (max-width:380px) {
+    #calib { max-width:65vw; }
+    #calib-toggle { font-size:11px; padding:6px 7px; }
+    #calib-controls button { font-size:9px; padding:5px 6px; }
+    #calib-controls button svg { width:16px; height:16px; }
+  }
+
+  @media (max-width:380px) {
+    #minimap-wrap:not(.expanded) { width:88px; height:88px; }
+  }
+
+  @media (max-width:380px) {
+    #overlay .card { max-width:100%; padding:18px; }
+    #hud { font-size:.66rem; padding:5px 8px; }
+  }
+</style>
+</head>
+<body>
+
+<video id="cam" playsinline autoplay muted></video>
+<div id="dim-overlay"></div>
+
+<div id="hud">
+  <span id="hud-cam">カメラ: —</span> ·
+  <span id="hud-gps">GPS: —</span> ·
+  <span id="hud-heading">方位: —</span> ·
+  <span id="hud-data">表示: —</span>
+  <span id="hud-err" class="err"></span>
+</div>
+
+<button id="cam-toggle">映像を暗くする</button>
+
+<div id="minimap-wrap">
+  <div id="minimap"></div>
+  <div id="minimap-tap"></div>
+  <button id="minimap-close">閉じる</button>
+</div>
+
+<div id="calib">
+  <button id="calib-toggle">方位補正 0°</button>
+  <div id="calib-controls">
+    <button data-step="-10" title="時計回りに10度" aria-label="時計回りに10度回転">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 12a8 8 0 1 1-2.6-5.9"></path>
+        <polyline points="19 2 19 7 14 7"></polyline>
+      </svg>
+      <span>10°</span>
+    </button>
+    <button data-step="-1" title="時計回りに1度" aria-label="時計回りに1度回転">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 12a8 8 0 1 1-2.6-5.9"></path>
+        <polyline points="19 2 19 7 14 7"></polyline>
+      </svg>
+      <span>1°</span>
+    </button>
+    <span id="calib-value">0°</span>
+    <button data-step="1" title="反時計回りに1度" aria-label="反時計回りに1度回転">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 12a8 8 0 1 0 2.6-5.9"></path>
+        <polyline points="5 2 5 7 10 7"></polyline>
+      </svg>
+      <span>1°</span>
+    </button>
+    <button data-step="10" title="反時計回りに10度" aria-label="反時計回りに10度回転">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 12a8 8 0 1 0 2.6-5.9"></path>
+        <polyline points="5 2 5 7 10 7"></polyline>
+      </svg>
+      <span>10°</span>
+    </button>
+  </div>
+</div>
+
+<div id="overlay">
+  <div class="card">
+    <h1>農地レイヤーAR（筆ポリゴン・半径250m）</h1>
+    <p>筆ポリゴンから変換したGeoJSONを読み込み、現在地から半径250m以内の筆だけを輪郭線として表示します。押し出し（立ち上げ）は行いません。</p>
+
+    <label for="geojson-file">GeoJSONファイル（指定がなければ ./ube.geojson を読み込む）</label>
+    <input type="file" id="geojson-file" accept=".geojson,.json,application/geo+json,application/json">
+
+    <div id="radius-row">
+      <label for="radius" style="margin:0;">表示半径(m)</label>
+      <input type="number" id="radius" value="250" min="10" step="10">
+    </div>
+
+    <button id="start">開始</button>
+  </div>
+</div>
+
+<script>
+  function setCam(t){ document.getElementById("hud-cam").textContent = "カメラ: " + t; }
+  function setGps(t){ document.getElementById("hud-gps").textContent = "GPS: " + t; }
+  function setData(t){ document.getElementById("hud-data").textContent = "表示: " + t; }
+  function setErr(t){ document.getElementById("hud-err").textContent = t ? ("  " + t) : ""; }
+
+  // ---- カメラ映像を暗くする。映像とARシーンの間に黒レイヤーを挟むだけなので、
+  //      ARの描画設定（alpha合成など）の状態に関わらず確実に効果が出る。----
+  document.getElementById("cam-toggle").addEventListener("click", function () {
+    var dimmed = document.body.classList.toggle("dimmed");
+    this.textContent = dimmed ? "映像を戻す" : "映像を暗くする";
+  });
+
+  // ---- HUDはGPS座標や方位の文字数で高さが変わる（狭い画面では2行になる）。
+  //      固定pxで下にボタンを置くとHUDと重なるため、実際の高さを測って追従させる。----
+  (function () {
+    var hud = document.getElementById("hud");
+    var btn = document.getElementById("cam-toggle");
+    function sync() {
+      btn.style.top = (hud.getBoundingClientRect().height + 8) + "px";
+    }
+    if (window.ResizeObserver) {
+      new ResizeObserver(sync).observe(hud);
+    } else {
+      window.addEventListener("resize", sync); // ResizeObserver非対応環境向けの簡易フォールバック
+    }
+    sync();
+  })();
+
+  // ---- 方位（8分割）表示 ----
+  var DIRS_JA = ["北","北東","東","南東","南","南西","西","北西"];
+  function directionLabel(deg) {
+    var idx = Math.round(deg / 45) % 8;
+    return DIRS_JA[idx];
+  }
+  function setHeading(deg) {
+    document.getElementById("hud-heading").textContent =
+      "方位: " + Math.round(deg) + "\u00b0 (" + directionLabel(deg) + ")";
+  }
+
+  var userPos = null;          // { lat, lon }
+  var allFeatures = null;      // GeoJSONのfeatures全件（フィルタ前）
+  var placedEntities = [];     // { el, lat, lon }
+  var filtered = false;        // 250m絞り込みを一度実行したか
+  var radiusM = 250;
+
+  var miniMap = null;
+  var beaconMarker = null;
+  var mapStyleLoaded = false;
+  var pendingParcelGeojson = null;
+
+  var worldEntity = null;      // 配置済み地物の親。方位補正の回転をここに適用する
+  var headingOffsetDeg = 0;
+
+  function calcOffset(lat, lon, uLat, uLon) {
+    var mLat = 110574;
+    var mLon = 111320 * Math.cos(uLat * Math.PI / 180);
+    var north = (lat - uLat) * mLat;
+    var east  = (lon - uLon) * mLon;
+    return { x: east, z: -north, dist: Math.sqrt(east*east + north*north) };
+  }
+
+  function updatePositions() {
+    if (!userPos) return;
+    placedEntities.forEach(function (item) {
+      var off = calcOffset(item.lat, item.lon, userPos.lat, userPos.lon);
+      item.el.setAttribute("position", off.x.toFixed(2) + " 0 " + off.z.toFixed(2));
+    });
+  }
+
+  // ---- 筆の輪郭線のみを描画するコンポーネント（押し出しなし） ----
+  // vertsは代表点(point_lat/point_lng)からの相対オフセット[east, north]の配列。
+  AFRAME.registerComponent("parcel-outline", {
+    schema: {
+      verts: { type: "string" },
+      color: { type: "string", default: "#2D7D46" }
+    },
+    init: function () {
+      var pts = JSON.parse(this.data.verts);
+      var arr = [];
+      pts.forEach(function (p) { arr.push(p[0], 0, -p[1]); });
+      arr.push(pts[0][0], 0, -pts[0][1]); // 始点に戻して閉じる
+
+      var geom = new THREE.BufferGeometry();
+      geom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(arr), 3));
+      var mat = new THREE.LineBasicMaterial({ color: this.data.color });
+      this.el.setObject3D("outline", new THREE.Line(geom, mat));
+    }
+  });
+
+  AFRAME.registerComponent("face-camera", {
+    tick: function () {
+      var cam = this.el.sceneEl && this.el.sceneEl.camera;
+      if (!cam) return;
+      var camPos = new THREE.Vector3(); cam.getWorldPosition(camPos);
+      var myPos  = new THREE.Vector3(); this.el.object3D.getWorldPosition(myPos);
+      camPos.y = myPos.y;
+      this.el.object3D.lookAt(camPos);
+    }
+  });
+
+  // ---- ラベル用のテクスチャをCanvas 2Dで作る。a-text（MSDFフォント）はラテン文字中心の
+  //      字形しか持たず日本語が表示できないため、通常のフォントレンダリング経路を使う。----
+  function makeLabelTexture(text) {
+    var fontSize = 56;
+    var fontSpec = fontSize + 'px "BIZ UDPGothic","Hiragino Sans","Yu Gothic",sans-serif';
+    var measureCanvas = document.createElement("canvas");
+    var mctx = measureCanvas.getContext("2d");
+    mctx.font = fontSpec;
+    var textWidth = mctx.measureText(text).width;
+
+    var paddingX = 36, paddingY = 24;
+    var canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(textWidth + paddingX * 2);
+    canvas.height = fontSize + paddingY * 2;
+
+    var ctx = canvas.getContext("2d");
+    ctx.font = fontSpec; // canvasのサイズ変更でコンテキスト状態がリセットされるため再設定する
+    ctx.fillStyle = "rgba(248,250,251,0.92)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = "#1A1A1A";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(1.5, 1.5, canvas.width - 3, canvas.height - 3);
+    ctx.fillStyle = "#111111";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+    return canvas;
+  }
+
+  function makeLabel(text) {
+    var card = document.createElement("a-entity");
+    card.setAttribute("position", "0 0.4 0"); // 地面付近に留める
+    card.setAttribute("face-camera", "");
+
+    var canvas = makeLabelTexture(text);
+    var texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+
+    var planeHeight = 1.0; // ワールド単位
+    var planeWidth = planeHeight * (canvas.width / canvas.height);
+    var geom = new THREE.PlaneGeometry(planeWidth, planeHeight);
+    var mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
+    card.setObject3D("label", new THREE.Mesh(geom, mat));
+    return card;
+  }
+
+  function addParcel(parent, ring, anchorLat, anchorLon, uuid) {
+    var pts = ring.slice(0, ring.length - 1);
+    var mLat = 110574, mLon = 111320 * Math.cos(anchorLat * Math.PI / 180);
+    var localVerts = pts.map(function (c) {
+      var north = (c[1] - anchorLat) * mLat;
+      var east  = (c[0] - anchorLon) * mLon;
+      return [east, north];
+    });
+
+    var wrap = document.createElement("a-entity");
+    wrap.setAttribute("parcel-outline", { verts: JSON.stringify(localVerts), color: "#2D7D46" });
+    wrap.appendChild(makeLabel(uuid));
+    parent.appendChild(wrap);
+    placedEntities.push({ el: wrap, lat: anchorLat, lon: anchorLon });
+  }
+
+  // ---- 現在地から半径radiusM以内の筆だけを抽出して描画する ----
+  function applyRadiusFilter(scene) {
+    if (!userPos || !allFeatures || filtered) return;
+    filtered = true;
+
+    var matched = 0;
+    var minDist = null;
+    var matchedFeatures = [];
+    allFeatures.forEach(function (f) {
+      var p = f.properties || {};
+      var lat = p.point_lat, lon = p.point_lng;
+      if (lat == null || lon == null) return;
+      var off = calcOffset(lat, lon, userPos.lat, userPos.lon);
+      if (minDist == null || off.dist < minDist) minDist = off.dist;
+      if (off.dist > radiusM) return;
+      if (!f.geometry || f.geometry.type !== "Polygon") return;
+
+      addParcel(worldEntity, f.geometry.coordinates[0], lat, lon, p.name || p.polygon_uuid || "(不明)");
+      matchedFeatures.push(f);
+      matched++;
+    });
+
+    var summary = matched + " 件（全" + allFeatures.length + "件中、半径" + radiusM + "m）";
+    if (matched === 0 && minDist != null) {
+      summary += " / 最短" + Math.round(minDist) + "m（範囲外）";
+    }
+    setData(summary);
+    updatePositions();
+
+    addParcelLayerToMap({ type: "FeatureCollection", features: matchedFeatures });
+  }
+
+  // ---- ミニマップ側に、AR側で絞り込んだ筆と同じものをGeoJSONレイヤーとして表示する ----
+  function addParcelLayerToMap(fc) {
+    if (!miniMap) return;
+    if (!mapStyleLoaded) { pendingParcelGeojson = fc; return; }
+    if (miniMap.getSource("parcels")) {
+      miniMap.getSource("parcels").setData(fc);
+    } else {
+      miniMap.addSource("parcels", { type: "geojson", data: fc });
+      miniMap.addLayer({
+        id: "parcels-fill", type: "fill", source: "parcels",
+        paint: { "fill-color": "#2D7D46", "fill-opacity": 0.25 }
+      });
+      miniMap.addLayer({
+        id: "parcels-outline", type: "line", source: "parcels",
+        paint: { "line-color": "#2D7D46", "line-width": 2 }
+      });
+    }
+  }
+
+  // ---- geojson.ioなどで作った素のGeoJSON（point_lat/point_lng・polygon_uuidを
+  //      持たない）も扱えるよう、欠けている項目を読み込み時に自動補完する。----
+  function normalizeFeatures(features) {
+    features.forEach(function (f) {
+      var p = f.properties = f.properties || {};
+
+      if ((p.point_lat == null || p.point_lng == null) &&
+          f.geometry && f.geometry.type === "Polygon") {
+        var ring = f.geometry.coordinates[0];
+        var pts = ring.slice(0, ring.length - 1);
+        var lon = 0, lat = 0;
+        pts.forEach(function (c) { lon += c[0]; lat += c[1]; });
+        p.point_lng = lon / pts.length;
+        p.point_lat = lat / pts.length;
+      }
+
+      if (!p.polygon_uuid) {
+        // 表示ラベルはname優先のため、uuidは絞り込みロジック用の内部識別子として補う
+        p.polygon_uuid = "auto-" + Math.random().toString(36).slice(2, 10);
+      }
+    });
+    return features;
+  }
+
+  function loadGeojsonFromFile(file) {
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        var gj = JSON.parse(e.target.result);
+        allFeatures = normalizeFeatures(gj.features || []);
+        setData("GeoJSON読込済み（" + allFeatures.length + "件）。GPS取得待ち");
+      } catch (err) {
+        setErr("GeoJSON解析エラー: " + err);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function loadGeojsonFromUrl(url) {
+    fetch(url)
+      .then(function (r) { return r.json(); })
+      .then(function (gj) {
+        allFeatures = normalizeFeatures(gj.features || []);
+        setData("GeoJSON読込済み（" + allFeatures.length + "件）。GPS取得待ち");
+      })
+      .catch(function (e) { setErr("GeoJSON読込エラー: " + e); });
+  }
+
+  function buildOverlay(scene) {
+    var cam = document.createElement("a-camera");
+    cam.setAttribute("position", "0 1.6 0");
+    cam.setAttribute("look-controls-enabled", "false");
+    cam.setAttribute("wasd-controls-enabled", "false");
+    cam.setAttribute("arjs-device-orientation-controls", "smoothingFactor: 0.1");
+    scene.appendChild(cam);
+
+    worldEntity = document.createElement("a-entity");
+    worldEntity.setAttribute("rotation", "0 " + headingOffsetDeg + " 0");
+    scene.appendChild(worldEntity);
+  }
+
+  // ---- 方位補正パネル。AR.js側のカメラ回転処理と本アプリの座標系との間に
+  //      体系的なズレがある場合、配置済みの地物側を反対方向に回して見た目を合わせる。
+  //      普段は折りたたみ、必要な時だけ展開する（ミニマップとの重なりを避けるため）。----
+  document.getElementById("calib-toggle").addEventListener("click", function () {
+    document.getElementById("calib").classList.toggle("expanded");
+  });
+  document.querySelectorAll("#calib-controls button").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      headingOffsetDeg += parseFloat(btn.getAttribute("data-step"));
+      headingOffsetDeg = ((headingOffsetDeg % 360) + 360) % 360;
+      var label = Math.round(headingOffsetDeg) + "\u00b0";
+      document.getElementById("calib-value").textContent = label;
+      document.getElementById("calib-toggle").textContent = "方位補正 " + label;
+      if (worldEntity) worldEntity.setAttribute("rotation", "0 " + headingOffsetDeg + " 0");
+    });
+  });
+
+  function startCamera() {
+    return navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false })
+      .then(function (stream) {
+        var v = document.getElementById("cam");
+        v.srcObject = stream;
+        var play = v.play();
+        setCam("起動");
+        return play && play.then ? play.catch(function(){}) : null;
+      });
+  }
+
+  document.getElementById("start").addEventListener("click", function () {
+    var fileInput = document.getElementById("geojson-file");
+    var selectedFile = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+    radiusM = parseFloat(document.getElementById("radius").value) || 250;
+
+    setCam("要求中");
+    var DO = window.DeviceOrientationEvent, DM = window.DeviceMotionEvent;
+    if (DO && typeof DO.requestPermission === "function") DO.requestPermission().catch(function(){});
+    if (DM && typeof DM.requestPermission === "function") DM.requestPermission().catch(function(){});
+
+    // ---- 方位センサー。iOSはwebkitCompassHeading（0=北、時計回り）を優先し、
+    //      なければAndroid向けにdeviceorientationabsoluteのalphaから概算する。
+    function handleOrientation(e) {
+      var heading;
+      if (typeof e.webkitCompassHeading === "number") {
+        heading = e.webkitCompassHeading;
+      } else if (e.absolute && e.alpha != null) {
+        heading = 360 - e.alpha;
+      } else {
+        return; // 相対値のみでは方位を確定できないため無視する
+      }
+      heading = ((heading % 360) + 360) % 360;
+      setHeading(heading);
+      if (beaconMarker) beaconMarker.setRotation(heading);
+    }
+    if ("ondeviceorientationabsolute" in window) {
+      window.addEventListener("deviceorientationabsolute", handleOrientation, true);
+    } else {
+      window.addEventListener("deviceorientation", handleOrientation, true);
+    }
+
+    // ---- MapLibreミニマップ。north-up固定（bearing:0）で、現在地と方位を反映する。----
+    miniMap = new maplibregl.Map({
+      container: "minimap",
+      style: "https://tile.openstreetmap.jp/styles/osm-bright-ja/style.json",
+      center: [130.389615, 33.591517],
+      zoom: 16,
+      pitch: 0,
+      bearing: 0,
+      attributionControl: false
+    });
+    miniMap.on("load", function () {
+      mapStyleLoaded = true;
+      if (pendingParcelGeojson) addParcelLayerToMap(pendingParcelGeojson);
+    });
+    var beaconEl = document.createElement("div");
+    beaconEl.className = "beacon-marker";
+    beaconEl.innerHTML =
+      '<svg width="26" height="26" viewBox="0 0 26 26">' +
+      '<polygon points="13,0 18,10 13,7 8,10" fill="#2D7D46"></polygon>' +
+      '<circle cx="13" cy="13" r="5" fill="#2D7D46" stroke="#FFFFFF" stroke-width="2"></circle>' +
+      "</svg>";
+    beaconMarker = new maplibregl.Marker({ element: beaconEl, rotationAlignment: "map" })
+      .setLngLat([130.389615, 33.591517])
+      .addTo(miniMap);
+    var miniMapCentered = false;
+
+    var minimapWrap = document.getElementById("minimap-wrap");
+    document.getElementById("minimap-tap").addEventListener("click", function () {
+      minimapWrap.classList.add("expanded");
+      setTimeout(function () { miniMap.resize(); }, 0);
+    });
+    document.getElementById("minimap-close").addEventListener("click", function () {
+      minimapWrap.classList.remove("expanded");
+      setTimeout(function () { miniMap.resize(); }, 0);
+    });
+
+    startCamera()
+      .then(function () {
+        document.getElementById("overlay").style.display = "none";
+
+        var scene = document.createElement("a-scene");
+        scene.setAttribute("vr-mode-ui", "enabled: false");
+        scene.setAttribute("loading-screen", "enabled: false");
+        scene.setAttribute("embedded", "");
+        scene.setAttribute("renderer", "alpha: true; antialias: true");
+        buildOverlay(scene);
+        document.body.appendChild(scene);
+
+        if (selectedFile) loadGeojsonFromFile(selectedFile);
+        else loadGeojsonFromUrl("./ube.geojson");
+
+        if (navigator.geolocation) {
+          navigator.geolocation.watchPosition(
+            function (pos) {
+              var c = pos.coords;
+              userPos = { lat: c.latitude, lon: c.longitude };
+              setGps(c.latitude.toFixed(6) + ", " + c.longitude.toFixed(6) + " (\u00b1" + Math.round(c.accuracy) + "m)");
+              applyRadiusFilter(scene); // 最初の取得時に一度だけ絞り込みを行う
+              updatePositions();
+
+              beaconMarker.setLngLat([c.longitude, c.latitude]);
+              if (!miniMapCentered) {
+                miniMap.setCenter([c.longitude, c.latitude]);
+                miniMapCentered = true;
+              } else {
+                miniMap.panTo([c.longitude, c.latitude], { duration: 0 });
+              }
+            },
+            function (err) { setErr("GPSエラー: " + err.code + " " + err.message); },
+            { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+          );
+        }
+      })
+      .catch(function (e) {
+        setErr("カメラ不可: " + (e.name || e));
+      });
+  });
+</script>
+</body>
+</html>

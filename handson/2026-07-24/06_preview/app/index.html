@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>第5回 Terrain RGB 検証ビューア（hillshade）</title>
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/pmtiles@3.2.0/dist/pmtiles.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; }
+    #map { position: absolute; inset: 0; }
+    /* 検証情報パネル：モバイルでも地図操作を妨げない最小構成 */
+    #panel {
+      position: absolute;
+      top: 8px; left: 8px;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-family: sans-serif;
+      font-size: 13px;
+      color: #1a1a1a;
+      max-width: min(320px, calc(100vw - 32px));
+    }
+    #panel h1 { font-size: 14px; margin: 0 0 6px; }
+    #panel .row { margin: 2px 0; }
+    #panel code { background: #f0f0f0; padding: 1px 4px; border-radius: 2px; }
+    @media (max-width: 480px) {
+      #panel { font-size: 12px; padding: 6px 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="panel">
+    <h1>Terrain RGB 検証（hillshade）</h1>
+    <div class="row">ソース: <code id="src-label"></code></div>
+    <div class="row">ズーム: <span id="zoom-label">-</span></div>
+    <div class="row">クリック地点の標高: <span id="elev-label">-</span></div>
+  </div>
+  <div id="map"></div>
+
+  <script>
+    // ── 設定 ─────────────────────────────────────────────
+    // 05で配信した terrain.pmtiles の場所に合わせて変更する。
+    // 同ディレクトリに置いた場合はこのままでよい。
+    const TERRAIN_URL = "pmtiles://terrain.pmtiles";
+    // 表示初期位置（配布DEMの範囲に合わせて調整する）
+    const CENTER = [131.25, 33.95];   // 宇部市周辺（仮）
+    const ZOOM = 11;
+    // タイル生成時のズーム範囲（rio rgbify の --min-z / --max-z と一致させる）
+    const MINZOOM = 8;
+    const MAXZOOM = 14;
+    // ─────────────────────────────────────────────────────
+
+    document.getElementById("src-label").textContent = TERRAIN_URL;
+
+    const protocol = new pmtiles.Protocol();
+    maplibregl.addProtocol("pmtiles", protocol.tile);
+
+    const map = new maplibregl.Map({
+      container: "map",
+      center: CENTER,
+      zoom: ZOOM,
+      style: {
+        version: 8,
+        sources: {
+          // 位置関係の確認用に地理院淡色地図を下敷きにする
+          gsi_pale: {
+            type: "raster",
+            tiles: ["https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png"],
+            tileSize: 256,
+            attribution: "地理院タイル"
+          },
+          terrainSource: {
+            type: "raster-dem",
+            url: TERRAIN_URL,
+            // Mapbox Terrain-RGB 方式でエンコードした場合の指定。
+            // Terrarium方式（Mapterhorn等）を読む場合は "terrarium" に変更する。
+            encoding: "mapbox",
+            tileSize: 256,
+            minzoom: MINZOOM,
+            maxzoom: MAXZOOM
+          }
+        },
+        layers: [
+          { id: "base", type: "raster", source: "gsi_pale" },
+          {
+            id: "hillshade",
+            type: "hillshade",
+            source: "terrainSource",
+            paint: {
+              "hillshade-exaggeration": 0.6,
+              "hillshade-shadow-color": "#5a4a33"
+            }
+          }
+        ]
+      }
+    });
+
+    map.addControl(new maplibregl.NavigationControl(), "top-right");
+
+    map.on("move", () => {
+      document.getElementById("zoom-label").textContent = map.getZoom().toFixed(2);
+    });
+
+    // クリック地点の標高をタイルから直接デコードして表示する。
+    // 「タイルの中身は数値である」ことを確認するのが目的。
+    map.on("click", async (e) => {
+      const label = document.getElementById("elev-label");
+      try {
+        const z = Math.min(Math.floor(map.getZoom()), MAXZOOM);
+        const n = Math.pow(2, z);
+        const lon = e.lngLat.lng, lat = e.lngLat.lat;
+        const xf = ((lon + 180) / 360) * n;
+        const latRad = (lat * Math.PI) / 180;
+        const yf = ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n;
+        const x = Math.floor(xf), y = Math.floor(yf);
+        const px = Math.floor((xf - x) * 256);
+        const py = Math.floor((yf - y) * 256);
+
+        // pmtiles.js のAPIでタイルバイナリを直接取得する
+        const p = new pmtiles.PMTiles(TERRAIN_URL.replace("pmtiles://", ""));
+        const resp = await p.getZxy(z, x, y);
+        if (!resp || !resp.data) { label.textContent = "タイルなし"; return; }
+
+        const blob = new Blob([resp.data], { type: "image/png" });
+        const bmp = await createImageBitmap(blob);
+        const cv = document.createElement("canvas");
+        cv.width = cv.height = 256;
+        const ctx = cv.getContext("2d");
+        ctx.drawImage(bmp, 0, 0);
+        const [r, g, b] = ctx.getImageData(px, py, 1, 1).data;
+
+        // Mapbox Terrain-RGB のデコード式（スライドPart 2参照）
+        const h = -10000 + (r * 65536 + g * 256 + b) * 0.1;
+        label.textContent = h.toFixed(1) + " m (R:" + r + " G:" + g + " B:" + b + ")";
+      } catch (err) {
+        label.textContent = "取得失敗: " + err.message;
+      }
+    });
+  </script>
+</body>
+</html>

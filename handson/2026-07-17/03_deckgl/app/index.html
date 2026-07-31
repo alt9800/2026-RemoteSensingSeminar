@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>deck.gl Point Cloud on OSM</title>
+  <script src="https://unpkg.com/deck.gl@^9.0.0/dist.min.js"></script>
+  <style>
+    body { margin: 0; width: 100vw; height: 100vh; overflow: hidden; }
+    /* 出典表記：OSMタイル利用時は必須 */
+    #attribution {
+      position: fixed; bottom: 0; right: 0; z-index: 1000;
+      background: rgba(255,255,255,0.8);
+      padding: 2px 6px; font: 11px/1.4 sans-serif;
+    }
+    #attribution a { color: #06a; }
+  </style>
+</head>
+<body>
+<div id="attribution">
+  <a href="https://www.openstreetmap.org/copyright">&copy; OpenStreetMap</a> contributors |
+  <a href="https://deck.gl/">deck.gl</a>
+</div>
+<script>
+// ---- LAS 1.2 簡易パーサー（Point Format 0/1/2/3 対応） ----
+function parseLAS(arrayBuffer) {
+  const view = new DataView(arrayBuffer);
+  const sig = String.fromCharCode(
+    view.getUint8(0), view.getUint8(1),
+    view.getUint8(2), view.getUint8(3)
+  );
+  if (sig !== 'LASF') throw new Error('Not a LAS file');
+
+  const vMajor = view.getUint8(24);
+  const vMinor = view.getUint8(25);
+  const offsetToPoints = view.getUint32(96, true);
+  const pointFormat    = view.getUint8(104);
+  const pointRecLen    = view.getUint16(105, true);
+  const numPoints      = view.getUint32(107, true);
+  const xScale  = view.getFloat64(131, true);
+  const yScale  = view.getFloat64(139, true);
+  const zScale  = view.getFloat64(147, true);
+  const xOffset = view.getFloat64(155, true);
+  const yOffset = view.getFloat64(163, true);
+  const zOffset = view.getFloat64(171, true);
+
+  console.log('LAS ' + vMajor + '.' + vMinor +
+    ', Format ' + pointFormat +
+    ', ' + numPoints + ' points' +
+    ', RecLen ' + pointRecLen);
+  console.log('Scale:', xScale, yScale, zScale);
+  console.log('Offset:', xOffset, yOffset, zOffset);
+
+  // RGB offset per point format
+  var rgbOff = -1;
+  if (pointFormat === 2) rgbOff = 20;
+  else if (pointFormat === 3) rgbOff = 28;
+
+  var points = new Array(numPoints);
+  for (var i = 0; i < numPoints; i++) {
+    var o = offsetToPoints + i * pointRecLen;
+    var x = view.getInt32(o,     true) * xScale + xOffset;
+    var y = view.getInt32(o + 4, true) * yScale + yOffset;
+    var z = view.getInt32(o + 8, true) * zScale + zOffset;
+    var r = 180, g = 180, b = 180;
+    if (rgbOff >= 0) {
+      r = view.getUint16(o + rgbOff,     true) >> 8;
+      g = view.getUint16(o + rgbOff + 2, true) >> 8;
+      b = view.getUint16(o + rgbOff + 4, true) >> 8;
+    }
+    points[i] = { position: [x, y, z], color: [r, g, b] };
+  }
+  return { points: points, xOffset: xOffset, yOffset: yOffset, zOffset: zOffset };
+}
+
+// ---- メイン ----
+(async function() {
+  // ★ 書き換え箇所1：スキャン地点の経緯度 [経度, 緯度]
+  var SCAN_ORIGIN = [131.2470, 33.9520];
+  // ★ 書き換え箇所2：LASファイル名
+  var LAS_FILE = './scan_clean.las';
+
+  var buf = await fetch(LAS_FILE).then(function(r) { return r.arrayBuffer(); });
+  var las = parseLAS(buf);
+  var points = las.points;
+
+  if (points.length === 0) { console.error('0 points'); return; }
+
+  // LASヘッダのoffsetをUTM原点として差し引き、
+  // スキャン地点付近を原点とする相対座標（メートル）に変換する
+  for (var i = 0; i < points.length; i++) {
+    points[i].position[0] -= las.xOffset;
+    points[i].position[1] -= las.yOffset;
+    points[i].position[2] -= las.zOffset;
+  }
+  console.log('First pt:', points[0].position, points[0].color);
+
+  new deck.DeckGL({
+    initialViewState: {
+      longitude: SCAN_ORIGIN[0],
+      latitude: SCAN_ORIGIN[1],
+      zoom: 22,
+      pitch: 45,
+      maxZoom: 24
+    },
+    controller: true,
+    layers: [
+      new deck.TileLayer({
+        data: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        minZoom: 0,
+        maxZoom: 19,
+        renderSubLayers: function(props) {
+          var bb = props.tile.boundingBox;
+          return new deck.BitmapLayer(props, {
+            data: null,
+            image: props.data,
+            bounds: [bb[0][0], bb[0][1], bb[1][0], bb[1][1]]
+          });
+        }
+      }),
+      new deck.PointCloudLayer({
+        id: 'point-cloud',
+        data: points,
+        coordinateOrigin: SCAN_ORIGIN,
+        coordinateSystem: deck.COORDINATE_SYSTEM.METER_OFFSETS,
+        pointSize: 3,
+        getPosition: function(d) { return d.position; },
+        getColor: function(d) { return d.color; },
+        getNormal: [0, 0, 1]
+      })
+    ]
+  });
+
+  console.log('Done:', points.length, 'points');
+})();
+</script>
+</body>
+</html>
