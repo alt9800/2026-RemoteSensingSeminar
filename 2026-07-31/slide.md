@@ -153,60 +153,54 @@ style: |
 
 ---
 
-## 本日のタイムテーブル（140分）
+## 本日の流れ（2.5h）
 
-| 時間 | 内容 |
-|------|------|
-| 10分 | イントロ・前回の復習（Terrain RGBタイルはどこまでできたか） |
-| 15分 | ブラウザで地形を立体表示する2つの実装（MapLibre terrain / deck.gl TerrainLayer） |
-| 35分 | ハンズオン①：MapLibreで3D地形ビューア＋衛星画像・NDWIオーバーレイ |
-| 10分 | 休憩 |
-| 30分 | ハンズオン②：防災重点溜池を重ねたハザードマップビューア |
-| 15分 | 現地調査ツールとしての仕上げ：通信前提設計とオフライン設計の判断基準 |
-| 15分 | 全6回の振り返り・Q&A |
-
-<div class="note">前回はGDALで高さデータを「WebGISが読める形」に変換した。今回はそれをブラウザで立体的に描き、実務データと重ねる回。</div>
+| 時間          | 内容 |
+| ----------- | ---- |
+| 00:00–00:10 | 前回成果物の確認・本日の位置づけ |
+| 00:10–00:25 | ブラウザで地形を立体表示する2つの実装（MapLibre / deck.gl） |
+| 00:25–00:55 | ハンズオン①：`terrain.pmtiles` を3D表示する |
+| 00:55–01:05 | Mapterhorn比較：解像度とエンコード方式の違いを見る |
+| 01:05–01:15 | 休憩 |
+| 01:15–01:45 | ハンズオン②：NDWI・防災重点溜池を重ねたハザードビューア |
+| 01:45–01:55 | 発展の紹介：PLATEAU 3D Tiles・deck.gl・AR（デモ・持ち帰り） |
+| 01:55–02:10 | 現地調査ツールとしての設計：通信前提とオフライン |
+| 02:10–02:30 | 全6回の振り返り・Q&A |
 
 ---
 
-## 前回の復習：手元にあるはずのもの
+## 前回作成したファイルがそのまま使えます
 
-第5回で作成した成果物を今日そのまま使う。
+第5回のハンズオンで手元に残っているはずのもの：
 
-| 成果物 | 形式 | 今日の用途 |
-|--------|------|-----------|
-| Terrain RGBタイル | XYZ PNGタイル | 地形の標高ソース |
-| COG化したDEM | GeoTIFF (COG) | 検算・QGISでの確認用 |
-| ヒルシェード | ラスタータイル | 平面地図への陰影オーバーレイ |
+| ファイル | 今日の用途 |
+| -------- | ---------- |
+| `terrain.pmtiles` | 3D表示の標高ソース（ハンズオン①②の主役） |
+| `dem_cog.tif` | 検算・QGISでの確認、COG直読みの実験 |
 
 ```sh
-# タイルディレクトリの確認（前回の出力）
-ls terrain-rgb/
-# => 10/ 11/ 12/ 13/ 14/  ← ズームレベルごとのディレクトリ
+# 中身の確認（第5回の復習）
+pmtiles show terrain.pmtiles
+# minzoom / maxzoom / bounds が対象範囲と合っているかを見る
 ```
 
-<div class="note">未完了の方は配布済みの完成版タイルセットを使ってください（USBまたはローカルサーバーから取得）。</div>
+未完走の方には完成版を用意しています。Slackの本日チャンネル、またはハンズオンページ記載の静的ファイルURLから取得してください。
+
+<div class="note">第5回の発展課題（GSI 1mメッシュ）まで進めた方は、そのpmtilesも後半で使えます。</div>
 
 ---
 
-## Terrain RGBの復習：標高を色に埋め込む
+## 配信のおさらい
 
-RGBの3チャンネル（各8bit）に標高値をエンコードした形式。
+PMTilesはHTTP経由で配信されている必要があります。`http-server`や`python -m http.server`などでハンズオン用ディレクトリをホストして進めてください。
 
+```sh
+cd handson-20260731
+python3 -m http.server 8000
+# → http://localhost:8000/01_terrain3d/
 ```
-elevation = -10000 + ((R * 256 * 256 + G * 256 + B) * 0.1)
-```
 
-- 1px = 24bit → 0.1m刻みで約1677万段階を表現できる
-- 見た目はサイケデリックな画像だが、デコードすれば数値ラスターに戻る
-- MapLibre・deck.glともにこの形式を直接読める
-
-| 方式 | 由来 | デコード式 |
-|------|------|-----------|
-| Mapbox Terrain-RGB | Mapbox | 上記の式 |
-| Terrarium | Mapzen (AWS Terrain Tiles) | `(R * 256 + G + B / 256) - 32768` |
-
-<span class="warn">どちらの式でエンコードしたかを取り違えると標高が壊れる。</span>前回はMapbox式（`rio rgbify`のデフォルト）で作成した。
+第2回のNginx構成がある方はそちらでも構いません。
 
 ---
 
@@ -216,44 +210,43 @@ elevation = -10000 + ((R * 256 * 256 + G * 256 + B) * 0.1)
 |---|---|---|
 | 立ち位置 | 地図エンジンの組み込み機能 | 汎用WebGLレイヤーの一つ |
 | 実装量 | 少ない（`setTerrain`一発） | 中程度（レイヤー定義を書く） |
+| デコード | `encoding`指定（mapbox / terrarium） | `elevationDecoder`に式を自分で書く |
 | カメラ | 地図的（pitch最大85度前後） | 自由（真横からも見られる） |
-| 他レイヤーとの合成 | スタイル内で完結 | 任意のdeck.glレイヤーと合成 |
 | 適する用途 | 背景としての地形＋2D的操作 | 点群・解析結果との統合表示 |
 
-今日は両方を動かして比較する。
+本日の主経路はMapLibre。実装が軽く、スマホブラウザでの現地利用に向く。
 
-- ハンズオン①：MapLibre（実装が軽く、現地調査ツールに向く）
-- ハンズオン②の後半で：deck.gl版との見え方の違いを確認
+deck.gl版は`04_deckgl_terrain`に比較用コードを置いています（第4回のPointCloudLayerと同じ枠組みで書ける）。
 
 ---
 
 ## MapLibre terrainの最小構成
 
-スタイルに`raster-dem`ソースを追加し、`setTerrain`で指定するだけ。
+第5回の検証ビューア（hillshade）に、`setTerrain`を足すだけで3Dになる。
 
 ```js
-const map = new maplibregl.Map({
-  container: 'map',
-  style: 'style.json',
-  center: [131.25, 33.95],
-  zoom: 12,
-  pitch: 60,          // 立体感を出すには pitch が必須
-  maxPitch: 85
-});
+const protocol = new pmtiles.Protocol();
+maplibregl.addProtocol("pmtiles", protocol.tile);
 
-map.on('load', () => {
-  map.addSource('dem', {
-    type: 'raster-dem',
-    tiles: ['./terrain-rgb/{z}/{x}/{y}.png'],
-    tileSize: 256,
-    encoding: 'mapbox',   // Terrarium形式なら 'terrarium'
-    maxzoom: 14
-  });
-  map.setTerrain({ source: 'dem', exaggeration: 1.5 });
+const map = new maplibregl.Map({
+  container: "map",
+  style: { version: 8, sources: {
+    terrainSource: {
+      type: "raster-dem",
+      url: "pmtiles://terrain.pmtiles",
+      encoding: "mapbox",       // 第5回のrio rgbify / 自前エンコードはこの方式
+      tileSize: 256
+    }, /* ... 背景タイル省略 ... */ },
+    layers: [ /* ... */ ] },
+  center: [131.256, 33.983],
+  zoom: 14, pitch: 60, maxPitch: 85
+});
+map.on("load", () => {
+  map.setTerrain({ source: "terrainSource", exaggeration: 1.5 });
 });
 ```
 
-<div class="note">配信は第2回で構築したNginx静的配信がそのまま使える。Terrain RGBタイルはただのPNGなので特別な設定は不要。</div>
+<span class="warn">ソースの`minzoom`/`maxzoom`はpmtilesの実ズーム範囲に合わせる。</span>実データより低いminzoomを書いても、そのズームにタイルは存在しない（初期表示が空になる典型例）。
 
 ---
 
@@ -266,35 +259,32 @@ map.on('load', () => {
 
 | 用途 | 目安 |
 |------|------|
-| 広域の概観（県スケール） | 1.5〜2.0 |
+| 広域の概観 | 1.5〜2.0 |
 | 現地調査・斜度の読み取り | 1.0〜1.2 |
-| プレゼン・デモ | 2.0前後（ただし誇張している旨を明記） |
+| プレゼン・デモ | 2.0前後 |
 
-<span class="warn">実務資料に誇張した3D表示を載せる場合は倍率を必ず注記する。</span>「見栄えのための誇張」と「判断材料としての表示」は分けて考える。
+実務資料に載せる場合は誇張倍率を注記する。見せるための誇張と判断材料としての表示は分けて考える。
 
 ---
 
 ## hillshade：3Dにしなくても伝わる場面は多い
 
-MapLibreは同じ`raster-dem`ソースから陰影段彩（hillshade）レイヤーも生成できる。
+同じ`raster-dem`ソースから陰影段彩レイヤーも作れる（第5回の検証ビューアがこれ）。
 
 ```js
 map.addLayer({
-  id: 'hillshade',
-  type: 'hillshade',
-  source: 'dem',
-  paint: {
-    'hillshade-exaggeration': 0.4,
-    'hillshade-shadow-color': '#473B24'
-  }
+  id: "hillshade",
+  type: "hillshade",
+  source: "terrainSource",
+  paint: { "hillshade-exaggeration": 0.6 }
 });
 ```
 
-- pitchを倒さない平面地図でも地形が読める
-- 3D表示より描画負荷が軽い（モバイルで効く）
-- 溜池・水路と地形の関係を俯瞰するにはむしろ平面＋陰影が読みやすいことも
+- pitchを倒さない平面地図でも地形が読める。描画負荷も3Dより軽い
+- 溜池・水路と地形の関係を俯瞰するには、平面＋陰影の方が読みやすいことも
+- 光源方向に依存する弱点は第5回で触れたCS立体図・赤色立体図の出発点
 
-<div class="note">「3Dで見せること」自体は目的ではない。読み取りたい情報に対して表示方法を選ぶ。</div>
+3Dで見せること自体は目的ではない。読み取りたい情報に合わせて表示を選ぶ。
 
 ---
 
@@ -302,132 +292,51 @@ map.addLayer({
 
 # ハンズオン①
 
-## 3D地形ビューア＋NDWIオーバーレイ
+## terrain.pmtiles を3D表示する
 
-- 前回のTerrain RGBタイルをMapLibreで立体表示する
-- 配布済みNDWIラスタータイルを半透明で重ねる
-- 垂直誇張・不透明度をUIから調整できるようにする
+- 第5回の検証ビューアを3D地形ビューアに発展させる
+- 垂直誇張スライダー・hillshade切り替えをつける
+- クリック地点の標高読み取り（Terrain RGBデコードの復習）
 
-<div class="note">手順は本スライドに沿って進めます。完成版コードは handson/01_terrain_viewer/ にあります。</div>
-
----
-
-## ハンズオン①：ファイル構成
-
-```
-01_terrain_viewer/
-├── index.html        # 本体（HTML + JS + CSS を1ファイルに）
-├── terrain-rgb/      # 前回作成したTerrain RGBタイル
-│   └── {z}/{x}/{y}.png
-└── ndwi/             # 配布済みNDWIラスタータイル
-    └── {z}/{x}/{y}.png
-```
-
-配信はローカルNginxまたは開発サーバーで行う。
-
-```sh
-# 手軽に試すなら（Python標準ライブラリ）
-python3 -m http.server 8000
-# ブラウザで http://localhost:8000/index.html
-```
-
-<span class="warn">`file://`で直接開くとタイルのfetchが失敗する。</span>必ずHTTP経由で配信する。
+<div class="note">資料：handson/01_terrain3d/（完成版index.html同梱）</div>
 
 ---
 
-## ハンズオン①：NDWIタイルを重ねる
+## ハンズオン①：チェックポイント
 
-NDWI（正規化水指数）は水域で高い値を示す。配布タイルは水域を青系で着色済み。
-
-```js
-map.addSource('ndwi', {
-  type: 'raster',
-  tiles: ['./ndwi/{z}/{x}/{y}.png'],
-  tileSize: 256,
-  minzoom: 10,
-  maxzoom: 14
-});
-map.addLayer({
-  id: 'ndwi-layer',
-  type: 'raster',
-  source: 'ndwi',
-  paint: { 'raster-opacity': 0.6 }   // 地形が透けて見える程度に
-});
-```
-
-- terrainが有効な状態では、rasterレイヤーも地形に沿って貼り付く
-- 谷筋・低地とNDWIの高い領域（水域・湿潤域）の対応が立体的に読める
-
----
-
-## ハンズオン①：UIをつける（誇張・不透明度スライダー）
-
-```html
-<div id="ctrl">
-  <label>垂直誇張 <input type="range" id="exag"
-    min="0" max="3" step="0.1" value="1.5"></label>
-  <label>NDWI不透明度 <input type="range" id="op"
-    min="0" max="1" step="0.05" value="0.6"></label>
-</div>
-```
-
-```js
-document.getElementById('exag').addEventListener('input', (e) => {
-  map.setTerrain({ source: 'dem', exaggeration: Number(e.target.value) });
-});
-document.getElementById('op').addEventListener('input', (e) => {
-  map.setPaintProperty('ndwi-layer', 'raster-opacity', Number(e.target.value));
-});
-```
-
-```css
-/* 地図の上に重ねる操作パネル。モバイルでは下端に寄せて親指で届く位置に */
-#ctrl { position: absolute; z-index: 1; bottom: 12px; left: 12px;
-        background: rgba(255,255,255,0.9); padding: 8px 12px; border-radius: 6px; }
-@media (max-width: 600px) { #ctrl { left: 8px; right: 8px; } }
-```
-
----
-
-## チェックポイント①
-
-以下が確認できたら休憩へ。
-
-- pitchを倒すと地形が立体的に表示される
-- スライダーで誇張倍率がリアルタイムに変わる
-- NDWIレイヤーが地形に沿って表示され、不透明度を調整できる
-- 谷筋・溜池の位置とNDWI高値域が対応している
-
-うまくいかないときの切り分け：
+- pitchを倒すと地形が立体表示される
+- スライダーで誇張倍率が変わる
+- クリックした地点の標高値が妥当（第5回のgdalinfo statsと突き合わせる）
 
 | 症状 | 確認すること |
 |------|-------------|
-| 地形が真っ平ら | `pitch`が0のまま／`setTerrain`が`load`前に呼ばれていないか |
-| 標高が異常（数千m等） | `encoding`指定とエンコード方式の不一致 |
-| タイルが404 | パスの`{z}/{x}/{y}`とディレクトリ構造の対応、配信URL |
-| モバイルで極端に重い | `maxzoom`の下げすぎ・タイルサイズ・端末のWebGL性能 |
+| 地形が真っ平ら | `pitch`が0のまま／`setTerrain`が`load`前に呼ばれている |
+| 初期表示が空 | ソースのminzoomと実データのズーム範囲の不一致 |
+| 標高が異常（-10000m等） | NoData由来。エンコード時の欠測処理を確認（第5回04参照） |
+| 深い穴・崖が出る | 同上。データ縁のNoDataが標高値として解釈されている |
+
+<div class="note">1mメッシュ由来のデータは実測範囲が狭く、範囲外がNoDataになりやすい。「穴」はバグではなくデータの被覆そのもの。</div>
 
 ---
 
-## 防災重点溜池データ（国土数値情報）
+## Mapterhorn比較：同じ場所を別のタイルで見る
 
-ハンズオン②で使う実務データ。
+第5回で紹介したMapterhornのzxyエンドポイントをソースとして差し替えてみる。
 
-- 農業用溜池のうち、決壊時に人的被害を与えるおそれのあるものを都道府県が選定
-- 国土数値情報（ため池データ）としてGeoJSON/Shapefileで公開されている
-- 属性：名称、所在地、堤高、貯水量、防災重点指定の有無など
-
-前処理は第1回・第2回で学んだ流れがそのまま使える：
-
-```sh
-# Shapefile → GeoJSON（山口県分を抽出済みのものを配布）
-ogr2ogr -f GeoJSON tameike.geojson tameike.shp -t_srs EPSG:4326
-
-# 件数が多い場合はPMTiles化（今回の県内データは素のGeoJSONで足りる）
-tippecanoe -o tameike.pmtiles -zg tameike.geojson
+```js
+terrainSource: {
+  type: "raster-dem",
+  tiles: ["https://tiles.mapterhorn.com/{z}/{x}/{y}.webp"],
+  encoding: "terrarium",   // Mapbox方式ではない
+  tileSize: 512            // 256のままだと標高が破綻する
+}
 ```
 
-<div class="note">「タイル配信で学んだ変換パイプライン」「高さデータ」「実務のポイントデータ」がここで一つに合流する。</div>
+見るべき違い：
+
+- **解像度**：日本域は現状Copernicus 30m相当。自作の1m/10mタイルと同じ谷を見比べると、グローバルデータと国内データの情報量の差が視覚的にわかる
+- **エンコード方式**：`encoding`と`tileSize`の2箇所を差し替え忘れると壊れた地形になる。第5回で「方式に互換性はない」と述べたことの実演
+- **配信形態**：先方はPMTiles＋zxyの両対応。自作タイルと同じ設計思想で公開されている
 
 ---
 
@@ -435,102 +344,126 @@ tippecanoe -o tameike.pmtiles -zg tameike.geojson
 
 # ハンズオン②
 
-## 防災重点溜池を重ねたハザードマップビューア
+## NDWI・防災重点溜池を重ねたハザードビューア
 
-- ハンズオン①のビューアに溜池ポイント/ポリゴンを追加する
-- タップで属性（名称・堤高・貯水量）をポップアップ表示する
-- 地形＋NDWI＋溜池で「決壊時にどこへ流れるか」を目視で検討する
+- ハンズオン①のビューアにラスター・ベクターを重ねる
+- タップで溜池の属性（名称・堤高・貯水量）を表示する
+- 地形＋NDWI＋溜池で、水の溜まる場所・流れる先を目視で検討する
+
+<div class="note">資料：handson/03_hazard_viewer/（NDWIタイル・溜池GeoJSONは配布データに同梱）</div>
 
 ---
 
-## ハンズオン②：溜池レイヤーの追加
+## 防災重点溜池データ（国土数値情報）
+
+- 農業用溜池のうち、決壊時に人的被害を与えるおそれのあるものを都道府県が選定
+- 国土数値情報としてGeoJSON/Shapefileで公開。属性に名称・堤高・貯水量など
+
+前処理は第1〜2回で学んだ流れがそのまま使える：
+
+```sh
+ogr2ogr -f GeoJSON tameike.geojson tameike.shp -t_srs EPSG:4326
+# 件数が多ければPMTiles化（今回の県内データは素のGeoJSONで足りる）
+```
+
+タイル配信の変換パイプライン・高さデータ・実務のベクターデータが、ここで一つの画面に合流する。
+
+---
+
+## ハンズオン②：溜池レイヤーとポップアップ
 
 ```js
-map.addSource('tameike', {
-  type: 'geojson',
-  data: './tameike.geojson'
-});
+map.addSource("tameike", { type: "geojson", data: "./tameike.geojson" });
 map.addLayer({
-  id: 'tameike-pt',
-  type: 'circle',
-  source: 'tameike',
-  paint: {
-    'circle-radius': 6,
-    'circle-color': '#B91C1C',
-    'circle-stroke-color': '#ffffff',
-    'circle-stroke-width': 1.5
-  }
+  id: "tameike-pt", type: "circle", source: "tameike",
+  paint: { "circle-radius": 6, "circle-color": "#B91C1C",
+           "circle-stroke-color": "#fff", "circle-stroke-width": 1.5 }
 });
-map.on('click', 'tameike-pt', (e) => {
+map.on("click", "tameike-pt", (e) => {
   const p = e.features[0].properties;
-  new maplibregl.Popup()
-    .setLngLat(e.lngLat)
+  new maplibregl.Popup().setLngLat(e.lngLat)
     .setHTML(`<strong>${p.name}</strong><br>堤高: ${p.height} m<br>貯水量: ${p.volume} m³`)
     .addTo(map);
 });
 ```
 
-<div class="note">terrain有効時、circleレイヤーは地表面の標高に配置される。ポップアップの座標も地形を考慮して表示される。</div>
+terrain有効時、circleレイヤーは地表面の標高に配置される。
 
 ---
 
 ## ハンズオン②：読み取りの演習
 
-3つのレイヤーを重ねた状態で、次を検討する。
+3層を重ねた状態で検討する：
 
-1. 溜池の直下流にあたる谷筋はどこか（誇張1.5前後で確認）
-2. NDWI高値域と溜池の位置関係：常時水がある谷か、乾いた谷か
+1. 溜池の直下流にあたる谷筋はどこか（誇張1.5前後）
+2. NDWI高値域と溜池の位置関係。常時水がある谷か、乾いた谷か
 3. 谷の出口に集落・農地（第2回のfude.pmtilesを重ねてもよい）があるか
 
-<span class="warn">この目視検討は「浸水想定区域図」の代替にはならない。</span>正式な氾濫解析は水理計算に基づく。ここで作っているのは、現地に行く前に地形と水の関係を掴むための下見ツール。
-
-- どのデータが「解析結果」で、どれが「素のデータの重ね合わせ」かを区別する
-- リモートセンシング由来の値（NDWI）も観測日・雲・解像度の影響を受けている
+これはあくまで下見ツールであり、浸水想定区域図の代替ではない（正式な氾濫解析は水理計算に基づく）。重ねているのは解析結果ではなく素のデータであり、NDWIの値も観測日・雲・解像度の影響を受けている——という区別を意識して読む。
 
 ---
 
-## 参考：deck.gl TerrainLayerでの実装
+## 発展①：PLATEAU 3D Tiles を地形の上に重ねる
 
-同じタイルセットをdeck.glでも表示できる。第4回のPointCloudLayerと同じ枠組み。
+第4回で扱った3D Tilesを、今日の地形と同じ画面に載せられる。
 
 ```js
-new deck.TerrainLayer({
-  id: 'terrain',
-  elevationData: './terrain-rgb/{z}/{x}/{y}.png',
-  texture: './ndwi/{z}/{x}/{y}.png',      // 表面に貼るテクスチャ
-  elevationDecoder: {                       // Mapbox式のデコード係数
-    rScaler: 6553.6, gScaler: 25.6, bScaler: 0.1, offset: -10000
-  },
-  maxZoom: 14
+// deck.gl Tile3DLayer + MapLibre（interleaved）
+new deck.Tile3DLayer({
+  id: "plateau-bldg",
+  data: "https://.../tileset.json",   // PLATEAU配信の建物3D Tiles
 });
 ```
 
-- `elevationDecoder`に式を直接書く＝エンコード方式の違いがコードに現れる
-- 点群（第4回）や解析メッシュと同一シーンで合成したい場合はdeck.glが向く
-- 単に「地図として地形を見たい」だけならMapLibreの方が実装も動作も軽い
+- PLATEAU（国交省）は建物等を3D Tilesでストリーミング配信している
+- 建物の高さ（第4回）と地形の高さ（第5〜6回）が同じシーンで合成される
+- 標高基準のずれ（第5回のジオイドの話）が「建物が浮く・沈む」という形で現れることがある。ずれを見つけたら原因を考えてみてほしい
 
-<div class="note">handson/03_deckgl_terrain/ に比較用の完成コードを置いています。時間があれば触ってください。</div>
+資料：`05_3dtiles_plateau/`。対象都市の収録状況により題材エリアが変わる可能性あり（当日案内）。
 
 ---
 
-## 現地調査ツールとして仕上げる
-
-スマホブラウザで動かす前提で確認すべきこと。
-
-| 観点 | 対応 |
-|------|------|
-| 画面サイズ | 操作パネルを下端配置・タップ領域を44px以上に |
-| 現在位置 | GeolocationAPI（第3回）でマーカー表示 |
-| 通信 | 現地の電波状況を事前に確認する |
-| バッテリー | WebGL＋GPSは消費が大きい。モバイルバッテリー携行 |
-| 直射日光 | 画面輝度・配色（白背景＋高コントラストが有利） |
+## 発展②：deck.gl TerrainLayer／Cesium経路
 
 ```js
-// 現在位置の追従（第3回の復習）
+new deck.TerrainLayer({
+  elevationData: "https://localhost:8000/terrain/{z}/{x}/{y}.png",
+  elevationDecoder: { rScaler: 6553.6, gScaler: 25.6, bScaler: 0.1, offset: -10000 },
+  texture: "..."   // 表面に貼るテクスチャ
+});
+```
+
+- `elevationDecoder`に式を直接書く設計。エンコード方式の違いがコードに現れる
+- 点群（第4回）や解析メッシュと同一シーンにしたい場合はこちらが向く
+
+CesiumJSで地形を扱う場合はラスタータイルではなくquantized-mesh（第5回で触れたRe:earth Terrainが直結）。Terrain RGBタイルからの直接変換経路は一般的でないため、Cesiumが要件なら配信元の選択から設計する。
+
+---
+
+## 発展③：DEMをARで見る（参考・持ち帰り）
+
+Terrain RGBをデコードして`PlaneGeometry`の頂点変位に使えば、卓上に地形模型を置くARが作れる（第3回のA-Frame環境の応用）。
+
+- 屋内で完結し、GPS精度に依存しない「模型AR」が現実的
+- 実地形に重ねる位置情報ARは、第3回で経験した方位・測位誤差がそのまま効いてくる
+
+タイルの中身が数値であることを最も実感できる応用のひとつ。`99_ar_dem/`にアイディアと参考実装へのリンクをまとめています。
+
+---
+
+## 現地で使うときに確認すること
+
+スマホブラウザで動かす前提なら、コードより先に運用面の確認事項が多い。
+
+操作パネルは画面下端に寄せる（親指が届く）、現在位置はGeolocation API（第3回）で追従、WebGLとGPSの併用はバッテリー消費が大きい、直射日光下では白背景・高コントラストが読みやすい——このあたりは実際に外で使ってみると必要性がわかる。
+
+```js
 navigator.geolocation.watchPosition((pos) => {
   marker.setLngLat([pos.coords.longitude, pos.coords.latitude]);
 }, null, { enableHighAccuracy: true });
 ```
+
+そして最大の変数が現地の通信環境。次のスライドで整理する。
 
 ---
 
@@ -540,45 +473,32 @@ navigator.geolocation.watchPosition((pos) => {
 
 | 判断材料 | 通信前提でよい | オフライン設計が必要 |
 |----------|---------------|---------------------|
-| 調査地の電波 | 市街地・幹線道路沿い | 山間部・谷底・トンネル |
+| 調査地の電波 | 市街地・幹線道路沿い | 山間部・谷底 |
 | 失敗時の影響 | 後日再訪できる | 再訪困難（船・許可が必要な場所） |
 | データ量 | タイル都度取得で足りる | 広域を高ズームで見る必要がある |
 | 利用者 | 自分（切り分けできる） | 配布先（トラブル対応できない） |
 
-オフライン化の主な手段（設計論として）：
+オフライン化の主な手段：
 
-- ブラウザのHTTPキャッシュ：滞在前に対象範囲をなぞって温めておく（簡易・保証なし）
-- Service Worker + Cache Storage：PWAとして明示的にタイルを先読み保存
-- タイル同梱：本セミナー第2回方式。Raspberry Pi等をローカル配信サーバーとして持参
-
-<div class="note">第2回のPi配信構成は「会場に通信がない」問題への回答だった。現地調査でも同じ構図が成り立つ。</div>
+- ブラウザのHTTPキャッシュ：事前に対象範囲をなぞって温める（簡易・保証なし）
+- Service Worker + Cache Storage：PWAとしてタイルを明示的に先読み保存
+- タイル同梱＋ローカル配信：第2回のRaspberry Pi構成。確実だが機材を持ち歩く
 
 ---
 
-## PWA・オフラインキャッシュ（設計の要点のみ）
-
-実装は持ち帰り課題とし、構成だけ押さえる。
+## タイル容量の見積り（オフライン設計の第一歩）
 
 ```
-アプリ本体（HTML/JS/CSS） … Service Workerでキャッシュ（小さい）
-タイル（terrain-rgb / ndwi）… 範囲×ズームで容量が急増する
-GeoJSON（溜池）            … 小さいのでキャッシュ容易
+必要容量 ≒ タイル数 × 平均タイルサイズ
+タイル数は範囲(bbox)とズーム範囲から機械的に決まる
 ```
 
-- タイル容量の概算：範囲とズームを決めれば `(タイル数) × (平均サイズ)` で見積もれる
-- z14まで市町村1つ分で数百MBになることもある。<span class="warn">「全部キャッシュ」は破綻する</span>
-- 調査対象範囲だけを先読みする設計（バウンディングボックス指定）が現実的
-- iOS SafariのCache Storageには容量・保持期間の制約がある点も考慮する
+- z14まで市町村1つ分で数百MBになることもある。全域キャッシュは現実的ではない
+- 調査対象範囲だけを先読みする設計（bbox指定）に落ち着くことが多い
+- PMTilesなら`pmtiles extract --bbox=...`で範囲を切り出したファイルを作れる（Mapterhornの配布方式と同じ）
+- iOS SafariのCache Storageには容量・保持期間の制約がある
 
-<div class="note">「どのレベルで自作するか」（第2回）と同じ問い。要件が軽ければブラウザキャッシュ、確実性が要るならタイル同梱＋ローカル配信。</div>
-
----
-
-## チェックポイント②
-
-- 溜池ポイントが地形上に表示され、タップで属性が出る
-- 地形・NDWI・溜池の3層を重ねて谷筋の読み取りができた
-- 自分の調査ユースケースが「通信前提」「オフライン必要」のどちらかを説明できる
+どのレベルで自作するか（第2回）と同じ問い。要件が軽ければブラウザ任せ、確実性が要るならファイル同梱。
 
 ---
 
@@ -593,19 +513,19 @@ GeoJSON（溜池）            … 小さいのでキャッシュ容易
 | 回 | 学んだこと | 今日どこで使ったか |
 |----|-----------|-------------------|
 | 第1回 | タイルの構造・生成 | Terrain RGBもXYZタイルの一種 |
-| 第2回 | 自前配信・スタイル | タイルの静的配信・配信環境持参の発想 |
-| 第3回 | スマホセンサー | 現在位置の追従表示 |
-| 第4回 | 3Dの描画基盤 | deck.glでの地形表示・点群との合成 |
+| 第2回 | 自前配信・スタイル | PMTiles配信・オフライン時のローカル配信 |
+| 第3回 | スマホセンサー | 現在位置の追従・AR応用 |
+| 第4回 | 3Dの描画基盤 | deck.gl・3D Tilesとの合成 |
 | 第5回 | 高さデータの変換 | 今日の入力データすべて |
 
-外部サービスの各機能が「この線のどこを肩代わりしているか」を指させれば、採用・自作の判断は自分でできる。
+外部サービスの各機能がこの線のどこを肩代わりしているかを指させれば、採用・自作の判断は自分でできる。
 
 ---
 
 ## この先へ
 
 - 正式な浸水解析・斜面解析への接続：GDAL/GRASS/SAGAの地形解析モジュール
-- 点群（第4回）とDEM（第5-6回）の統合：LiDAR点群からのDTM生成
+- 点群（第4回）とDEM（第5〜6回）の統合：LiDAR点群からのDTM生成（第5回08参照）
 - FOSS4Gコミュニティ：国内イベント・ソースコードリーディングは学習の近道
 - 本セミナーの教材はすべてリポジトリに残ります。改変・再利用は自由です
 
@@ -615,14 +535,16 @@ GeoJSON（溜池）            … 小さいのでキャッシュ容易
 
 ---
 
-## 付録：本日使ったデータの出典
+## データの入手元のまとめ
 
-| データ | 出典 |
-|--------|------|
-| DEM（元データ） | 第5回配布（基盤地図情報 数値標高モデル等） |
-| NDWIラスター | 配布済み（Sentinel-2由来、観測日はメタデータ参照） |
+| データ | 入手元 |
+|--------|--------|
+| DEM（元データ） | 基盤地図情報 数値標高モデル（国土地理院） |
+| Terrain RGBタイル | 第5回で自作／Mapterhorn（比較用） |
+| NDWIラスター | 配布データ（Sentinel-2由来、観測日はメタデータ参照） |
 | 防災重点溜池 | 国土数値情報 ため池データ（国土交通省） |
 | 筆ポリゴン | 農林水産省 筆ポリゴンオープンデータ |
-| 背景地図 | OpenStreetMap contributors / 地理院タイル |
+| 建物3D Tiles | PLATEAU（国土交通省） |
+| 背景地図 | OpenStreetMap contributors／地理院タイル |
 
-利用時は各データのライセンス・出典表記に従うこと。
+公開・再配布するものには出典を明記する。ここまでの6回で扱ったデータはすべてオープンデータだが、オープンであることと出典表記が不要であることは別の話。
